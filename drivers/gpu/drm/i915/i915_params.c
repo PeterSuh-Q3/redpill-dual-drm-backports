@@ -27,10 +27,10 @@
 #include "i915_params.h"
 #include "i915_drv.h"
 
-/* 4.4.302 module_param_named can't take a struct member (i915_modparams.name)
- * as the second argument — skip module parameter registration, use defaults. */
-#define i915_param_named(name, T, perm, desc)        MODULE_PARM_DESC(name, desc)
-#define i915_param_named_unsafe(name, T, perm, desc) MODULE_PARM_DESC(name, desc)
+/* 4.4.302: both module_param_named and MODULE_PARM_DESC fail with Synology kernel.
+ * Skip entirely — i915 parameters use compiled-in defaults. */
+#define i915_param_named(name, T, perm, desc)        /* noop */
+#define i915_param_named_unsafe(name, T, perm, desc) /* noop */
 
 struct i915_params i915_modparams __read_mostly = {
 #define MEMBER(T, member, value) .member = (value),
