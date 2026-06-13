@@ -1,0 +1,102 @@
+# ================================================================
+# Redpill Dual DRM OOT 병합 빌드 설정
+# 베이스: 커널 4.4.302 / OOT 소스: Linux 5.4 LTS + Cherry-pick
+# 설계서 §8 기준
+# ================================================================
+
+menu "Redpill Dual DRM OOT Backport"
+
+# ── 공유 DRM 레이어 (단일 인스턴스 필수) ──
+config DRM
+	tristate "Direct Rendering Manager (drm_core, 5.4 단일 소스)"
+	default m
+
+config DRM_TTM
+	tristate "TTM memory manager (중복 로드 절대 금지)"
+	depends on DRM
+	default m
+	help
+	  i915, amdgpu 양쪽이 이 단일 인스턴스를 공유한다.
+	  중복 로드 시 심볼 충돌 -> 링크 실패 또는 런타임 panic.
+
+# ── i915 ──
+config DRM_I915
+	tristate "Intel i915 (MT54 OOT, GEN5~GEN11)"
+	depends on DRM
+	default m
+
+config DRM_I915_GVT
+	bool "i915 GVT-g 가상화 지원"
+	depends on DRM_I915
+	default n
+	help
+	  Redpill 환경 불필요.
+
+config DRM_I915_USERPTR
+	bool "i915 userptr GEM"
+	depends on DRM_I915
+	default y
+	help
+	  QSV 활용 시 필요.
+
+# ── amdgpu ──
+config DRM_AMDGPU
+	tristate "AMD amdgpu (GCN4 Polaris ~ RDNA1 Navi)"
+	depends on DRM
+	default m
+
+config DRM_AMDGPU_SI
+	bool "amdgpu GCN1 (Southern Islands)"
+	depends on DRM_AMDGPU
+	default n
+	help
+	  타깃 외. 비활성화.
+
+config DRM_AMDGPU_CIK
+	bool "amdgpu GCN2 (Sea Islands)"
+	depends on DRM_AMDGPU
+	default n
+	help
+	  타깃 외. 비활성화.
+
+config DRM_AMD_DC
+	bool "amdgpu Display Core (DC)"
+	depends on DRM_AMDGPU
+	default y
+	help
+	  amdgpu 출력 필수.
+
+config DRM_AMD_DC_DCN1_0
+	bool "DCN 1.0 (Vega)"
+	depends on DRM_AMD_DC
+	default y
+
+config DRM_AMD_DC_DCN2_0
+	bool "DCN 2.0 (RDNA1)"
+	depends on DRM_AMD_DC
+	default y
+
+# ── compat shim 레이어 (본 프로젝트 신설 옵션) ──
+config DRM_BACKPORT_COMPAT
+	bool "4.4 호환 shim 레이어 활성화 [신설]"
+	depends on DRM
+	default y
+	help
+	  커널 표준 옵션이 아님. 본 프로젝트 커스텀 항목.
+	  Makefile 에서 obj-$(CONFIG_DRM_BACKPORT_COMPAT) += compat/ 로 연결.
+
+config DRM_I915_CML_HS
+	bool "CML-H/S Cherry-pick 활성화 [신설]"
+	depends on DRM_I915
+	default y
+	help
+	  Comet Lake-H/S PCI Device ID cherry-pick (5.5-rc1) 활성화.
+
+config DRM_I915_CML_S_VGA
+	bool "CML-S VGA 아날로그 출력"
+	depends on DRM_I915_CML_HS
+	default n
+	help
+	  DSM 환경 불필요. 기본 비활성화.
+
+endmenu

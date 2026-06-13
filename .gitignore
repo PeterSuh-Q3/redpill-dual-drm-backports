@@ -1,0 +1,24 @@
+# 빌드 산출물
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+*.symvers
+*.order
+.tmp_versions/
+modules.builtin*
+
+# 추출된 5.4 소스 (재현 가능, 추적 제외)
+drivers/gpu/drm/drm_core/drm_*.c
+drivers/gpu/drm/drm_core/ttm/*.c
+drivers/gpu/drm/i915/*.c
+!drivers/gpu/drm/i915/intel_device_info_cml_hs.c
+drivers/gpu/drm/amd/amdgpu/*.c
+drivers/gpu/drm/amd/display/
+
+# 펌웨어 바이너리
+firmware/**/*.bin
+
+# 빌드 작업 디렉토리
+/tmp/redpill-build/
