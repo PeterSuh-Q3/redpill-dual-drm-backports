@@ -11,4 +11,11 @@ typedef wait_queue_t wait_queue_entry_t;
 #ifndef __add_wait_queue_entry_tail
 #define __add_wait_queue_entry_tail __add_wait_queue_tail
 #endif
+#ifndef clear_and_wake_up_bit
+static inline void clear_and_wake_up_bit(int bit, void *word)
+{
+	clear_bit_unlock(bit, word);
+	wake_up_bit(word, bit);
+}
+#endif
 #endif

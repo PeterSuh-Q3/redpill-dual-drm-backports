@@ -18,8 +18,13 @@
 #define access_ok(...) \
 	_BPI_ACK_PICK(__VA_ARGS__, _bpi_access_ok3, _bpi_access_ok2)(__VA_ARGS__)
 
-#ifndef user_access_begin
+/* user_access_begin: 4.4.302 Synology may define 1-arg version; 5.4 uses 2-arg.
+ * Force 2-arg version regardless. */
+#ifdef user_access_begin
+#undef user_access_begin
+#endif
 #define user_access_begin(ptr, len) access_ok((ptr), (len))
+#ifndef user_access_end
 #define user_access_end() do { } while (0)
 #endif
 #endif

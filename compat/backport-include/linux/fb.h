@@ -4,6 +4,9 @@
 #ifndef _BPI_LINUX_FB_H
 #define _BPI_LINUX_FB_H
 #include_next <linux/fb.h>
+#ifndef FBINFO_HIDE_SMEM_START
+#define FBINFO_HIDE_SMEM_START 0
+#endif
 #ifndef _BPI_HAVE_REMOVE_CONFLICTING_PCI_FB
 #define _BPI_HAVE_REMOVE_CONFLICTING_PCI_FB
 struct pci_dev;
