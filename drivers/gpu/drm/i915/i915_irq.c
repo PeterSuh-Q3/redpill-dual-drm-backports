@@ -1138,7 +1138,7 @@ static u32 vlv_wa_c0_ei(struct drm_i915_private *dev_priv, u32 pm_iir)
 
 	vlv_c0_read(dev_priv, &now);
 
-	if (prev->ktime) {
+	if (prev->ktime.tv64) {
 		u64 time, c0;
 		u32 render, media;
 

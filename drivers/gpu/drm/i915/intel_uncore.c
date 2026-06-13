@@ -108,7 +108,7 @@ fw_domain_arm_timer(struct intel_uncore_forcewake_domain *d)
 	d->uncore->fw_domains_timer |= d->mask;
 	d->wake_count++;
 	hrtimer_start_range_ns(&d->timer,
-			       NSEC_PER_MSEC,
+			       ns_to_ktime(NSEC_PER_MSEC), /* 4.4: ktime_t, not scalar */
 			       NSEC_PER_MSEC,
 			       HRTIMER_MODE_REL);
 }

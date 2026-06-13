@@ -3182,26 +3182,10 @@ static const struct i2c_algorithm intel_sdvo_ddc_proxy = {
 	.functionality	= intel_sdvo_ddc_proxy_func
 };
 
-static void proxy_lock_bus(struct i2c_adapter *adapter,
-			   unsigned int flags)
-{
-	struct intel_sdvo *sdvo = adapter->algo_data;
-	sdvo->i2c->lock_ops->lock_bus(sdvo->i2c, flags);
-}
-
-static int proxy_trylock_bus(struct i2c_adapter *adapter,
-			     unsigned int flags)
-{
-	struct intel_sdvo *sdvo = adapter->algo_data;
-	return sdvo->i2c->lock_ops->trylock_bus(sdvo->i2c, flags);
-}
-
-static void proxy_unlock_bus(struct i2c_adapter *adapter,
-			     unsigned int flags)
-{
-	struct intel_sdvo *sdvo = adapter->algo_data;
-	sdvo->i2c->lock_ops->unlock_bus(sdvo->i2c, flags);
-}
+/* proxy_lock/trylock/unlock_bus: i2c_lock_operations not in 4.4.302 — stub out */
+static void proxy_lock_bus(struct i2c_adapter *adapter, unsigned int flags) { }
+static int  proxy_trylock_bus(struct i2c_adapter *adapter, unsigned int flags) { return 1; }
+static void proxy_unlock_bus(struct i2c_adapter *adapter, unsigned int flags) { }
 
 /* proxy_lock_ops: i2c_lock_operations not in 4.4.302, removed */
 

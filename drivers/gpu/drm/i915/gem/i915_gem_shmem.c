@@ -18,7 +18,7 @@
  */
 static void check_release_pagevec(struct pagevec *pvec)
 {
-	check_move_unevictable_pages(pvec);
+	check_move_unevictable_pages(pvec->pages, pvec->nr); /* 4.4.302: 2-arg */
 	__pagevec_release(pvec);
 	cond_resched();
 }

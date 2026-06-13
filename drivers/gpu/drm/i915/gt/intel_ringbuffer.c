@@ -2166,7 +2166,7 @@ static void ring_destroy(struct intel_engine_cs *engine)
 	kfree(engine);
 }
 
-static void setup_irq(struct intel_engine_cs *engine)
+static void ring_setup_irq(struct intel_engine_cs *engine)
 {
 	struct drm_i915_private *i915 = engine->i915;
 
@@ -2192,7 +2192,7 @@ static void setup_common(struct intel_engine_cs *engine)
 	/* gen8+ are only supported with execlists */
 	GEM_BUG_ON(INTEL_GEN(i915) >= 8);
 
-	setup_irq(engine);
+	ring_setup_irq(engine);
 
 	engine->destroy = ring_destroy;
 
