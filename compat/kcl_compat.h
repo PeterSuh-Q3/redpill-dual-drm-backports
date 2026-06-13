@@ -397,6 +397,7 @@ static inline bool dma_resv_is_locked(struct reservation_object *obj)
 
 /* --- vm: vmf_insert_pfn / vmf_insert_mixed (4.14+) --- */
 #include <linux/mm.h>
+/* vmf_insert_pfn (4.14+): ttm_bo_vm.c에서 vm_insert_pfn 직접 호출로 대체됨 */
 #ifndef vmf_insert_pfn
 static inline vm_fault_t vmf_insert_pfn(struct vm_area_struct *vma,
                                          unsigned long addr, unsigned long pfn)
@@ -407,16 +408,7 @@ static inline vm_fault_t vmf_insert_pfn(struct vm_area_struct *vma,
     return VM_FAULT_NOPAGE;
 }
 #endif
-#ifndef vmf_insert_mixed
-static inline vm_fault_t vmf_insert_mixed(struct vm_area_struct *vma,
-                                           unsigned long addr, pfn_t pfn)
-{
-    int err = vm_insert_mixed(vma, addr, pfn);
-    if (err == -ENOMEM) return VM_FAULT_OOM;
-    if (err) return VM_FAULT_SIGBUS;
-    return VM_FAULT_NOPAGE;
-}
-#endif
+/* vmf_insert_mixed: pfn_t 타입 의존으로 shim 불가 → 호출부(ttm_bo_vm.c)에서 직접 패치 */
 
 /* --- list: list_bulk_move_tail (4.20+) --- */
 #ifndef list_bulk_move_tail
