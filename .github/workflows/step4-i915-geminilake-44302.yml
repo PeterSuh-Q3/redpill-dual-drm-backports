@@ -1,90 +1,113 @@
-name: "[STEP4] i915 단독 빌드 진단 (geminilake 4.4.302)"
+name: "[STEP4] i915 단독 빌드 (geminilake 4.4.302)"
 
 # 설계서 §10 Step4. integration/dual-drm(vendor v5.4 + 레시피) 의 i915 를
-# Synology geminilake 4.4.302 KLIB 대상으로 OOT 빌드 시도.
-#
-# ★ 첫 런 목적 = 진단:
-#   (1) host 커널의 drm/i915 내장 여부 + Module.symvers 중복 심볼 지형
-#       → plain-CONFIG 로 충분한지 vs CPTCFG-rename 필요한지 판단 근거
-#   (2) compat shim(KCPPFLAGS) 주입 하 i915 컴파일 에러 1차 표면
-# 빌드 성공을 가정하지 않음. 로그가 산출물.
+# Synology geminilake 4.4.302 KLIB 대상으로 OOT 빌드.
+# 5.10.55 파일럿 워크플로우(dual-gpu-backports) 구조를 미러링.
+#   차이: 5.10.55=make defconfig-drm(i915-backports CPTCFG) → redpill=plain CONFIG 주입.
+# i915 단독: CONFIG_DRM/KMS_HELPER/I915=m, amdgpu/ttm/sched off.
 
 on:
   workflow_dispatch:
-    inputs:
-      dsm:
-        description: "DSM toolkit 버전 (geminilake 4.4.302)"
-        default: "7.2"
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  step4:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { version: "7.3", platform: geminilake }
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout integration/dual-drm (vendor + 레시피)
+      - name: Checkout (integration/dual-drm)
         uses: actions/checkout@v4
         with:
           ref: integration/dual-drm
           fetch-depth: 1
 
-      - name: Cache toolkit
+      - name: Cache toolkit tarballs
         uses: actions/cache@v4
         with:
           path: |
-            ds.geminilake-${{ inputs.dsm }}.env.txz
-            ds.geminilake-${{ inputs.dsm }}.dev.txz
-          key: toolkit-geminilake-${{ inputs.dsm }}
+            ds.${{ matrix.platform }}-${{ matrix.version }}.env.txz
+            ds.${{ matrix.platform }}-${{ matrix.version }}.dev.txz
+          key: toolkit-${{ matrix.platform }}-${{ matrix.version }}
 
-      - name: Download toolchain + kernel
+      - name: Download toolchain
         run: |
-          base=https://global.synologydownload.com/download/ToolChain/toolkit/${{ inputs.dsm }}/geminilake
-          for t in env dev; do
-            f=ds.geminilake-${{ inputs.dsm }}.$t.txz
-            [ -f "$f" ] || wget -q "$base/$f"
-          done
-          mkdir toolchain ksrc
-          tar xf ds.geminilake-${{ inputs.dsm }}.env.txz -C toolchain
-          tar xf ds.geminilake-${{ inputs.dsm }}.dev.txz -C ksrc
-
-      - name: "[DIAG] host drm/i915 심볼 지형"
-        run: |
-          KLIB=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ inputs.dsm }}/build
-          echo "KLIB=$KLIB"
-          echo "=== KLIB .config DRM/I915 ==="
-          grep -E '^CONFIG_DRM(_I915)?[ =]' "$KLIB/.config" 2>/dev/null || echo "(.config DRM 항목 없음)"
-          echo "=== host Module.symvers: drm/i915 export 수 ==="
-          SYMV="$KLIB/Module.symvers"
-          if [ -f "$SYMV" ]; then
-            echo "  drm_*  : $(awk '{print $2}' "$SYMV" | grep -c '^drm_')"
-            echo "  i915 관련(intel_/i915_): $(awk '{print $2}' "$SYMV" | grep -cE '^(i915_|intel_)')"
-            echo "  dma_fence_/dma_resv: $(awk '{print $2}' "$SYMV" | grep -cE '^dma_(fence|resv)')"
-            echo "  reservation_object : $(awk '{print $2}' "$SYMV" | grep -c '^reservation_object')"
-            echo "  --- 샘플 drm_ export 10개 ---"
-            awk '{print $2}' "$SYMV" | grep '^drm_' | head -10 | sed 's/^/    /'
-          else
-            echo "  [!] Module.symvers 없음 → 충돌 분석 불가"
+          env_tarball=ds.${{ matrix.platform }}-${{ matrix.version }}.env.txz
+          if [ -f "$env_tarball" ]; then echo "[cache] $env_tarball"; else
+            echo "[download] $env_tarball"
+            wget -q https://global.synologydownload.com/download/ToolChain/toolkit/${{ matrix.version }}/${{ matrix.platform }}/$env_tarball
           fi
-          echo "=== host 가 i915.ko 를 빌드하는가(빌트인 vs 모듈) ==="
-          grep -E '^CONFIG_DRM_I915=' "$KLIB/.config" 2>/dev/null
-          echo "KLIB=$KLIB" >> "$GITHUB_ENV"
+          mkdir toolchain
+          tar xf $env_tarball -C toolchain
 
-      - name: "[STEP4] i915 단독 빌드 시도 (probe)"
-        continue-on-error: true
+      - name: Download kernel source
         run: |
+          dev_tarball=ds.${{ matrix.platform }}-${{ matrix.version }}.dev.txz
+          if [ -f "$dev_tarball" ]; then echo "[cache] $dev_tarball"; else
+            echo "[download] $dev_tarball"
+            wget -q https://global.synologydownload.com/download/ToolChain/toolkit/${{ matrix.version }}/${{ matrix.platform }}/$dev_tarball
+          fi
+          mkdir ksrc
+          tar xf $dev_tarball -C ksrc
+
+      - name: Build (i915 단독, plain CONFIG)
+        run: |
+          export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
           export CROSS_COMPILE=$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-
+          export KBUILD_MODPOST_WARN=1
+
+          # compat 헤더 OOT 전파(KCPPFLAGS): drm 공통 + i915 전용 shim force-include
           COMPAT="-I$PWD/compat -I$PWD/include -include $PWD/compat/drm_compat.h -include $PWD/compat/i915_compat.h"
-          echo "=== i915 단독: CONFIG_DRM/KMS_HELPER/I915=m, amdgpu/ttm/sched off ==="
-          set +e
-          make -C "$KLIB" M=$PWD \
+
+          echo "=== host KLIB DRM/I915 .config ==="
+          grep -E '^CONFIG_DRM(_I915)?[ =]' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
+
+          OUT_MODULES=$PWD/out/modules
+          mkdir -p $OUT_MODULES
+
+          # i915 단독: amdgpu/ttm/sched off
+          make -C "$KLIB_BUILD" M=$PWD \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
-            KCPPFLAGS="$COMPAT" KBUILD_MODPOST_WARN=1 \
+            KCPPFLAGS="$COMPAT" \
             modules 2>&1 | tee /tmp/build.log
-          rc=${PIPESTATUS[0]}
-          echo "=== build rc=$rc ==="
-          echo "=== 에러/경고 상위 40 (error|undefined|redefin|conflict) ==="
-          grep -nE 'error:|undefined|redefinition|conflicting|No such file' /tmp/build.log | head -40
-          echo "=== 산출 .ko (있으면) ==="
-          find $PWD -name '*.ko' 2>/dev/null | sed 's#'$PWD'/##' | head
-          exit 0
+          BUILD_RC=${PIPESTATUS[0]}
+          echo "=== 빌드 로그 마지막 60줄 ==="
+          tail -60 /tmp/build.log
+          echo "=== 에러 요약 (error|undefined|redefinition|conflicting) ==="
+          grep -nE 'error:|undefined|redefinition|conflicting|No such file' /tmp/build.log | head -40 || echo "(에러 패턴 없음)"
+
+          make -C "$KLIB_BUILD" M=$PWD \
+            CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
+            INSTALL_MOD_PATH=$PWD/out/inter INSTALL_MOD_STRIP=1 CONFIG_MODULE_SIG_ALL= \
+            _emodinst_ 2>/dev/null || true
+          find $PWD/out/inter -type f -name '*.ko' -exec mv {} $OUT_MODULES \; 2>/dev/null || true
+
+          echo "=== 산출 .ko 목록 ==="
+          ls -1 out/modules/*.ko 2>/dev/null | xargs -n1 basename || echo "(없음)"
+
+          if [[ $BUILD_RC -ne 0 ]]; then
+            echo "::error::i915 빌드 실패 (exit $BUILD_RC) — 로그/에러요약 참조"
+            exit $BUILD_RC
+          fi
+
+      - name: "[VERIFY] host 중복 export 점검"
+        if: always()
+        run: |
+          export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
+          SYMV="$KLIB_BUILD/Module.symvers"
+          [ -f "$SYMV" ] || { echo "[WARN] host Module.symvers 없음"; exit 0; }
+          awk '{print $2}' "$SYMV" | sort -u > /tmp/host_syms.txt
+          echo "host export 총 $(wc -l < /tmp/host_syms.txt)개 / drm_ $(grep -c '^drm_' /tmp/host_syms.txt) / i915·intel_ $(grep -cE '^(i915_|intel_)' /tmp/host_syms.txt)"
+          total=0
+          for ko in out/modules/*.ko; do
+            [ -f "$ko" ] || continue
+            nm "$ko" 2>/dev/null | grep -oE '__ksymtab_[A-Za-z0-9_]+' | sed 's/__ksymtab_//' | sort -u > /tmp/ko_exp.txt
+            dup=$(comm -12 /tmp/ko_exp.txt /tmp/host_syms.txt)
+            [ -n "$dup" ] && { c=$(echo "$dup"|grep -c .); echo "  [DUP] $(basename $ko): $c"; total=$((total+c)); }
+          done
+          echo "=== 중복 export 총계: ${total} ==="
