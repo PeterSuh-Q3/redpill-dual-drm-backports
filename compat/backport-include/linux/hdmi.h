@@ -57,6 +57,15 @@ struct hdr_sink_metadata {
 
 int hdmi_drm_infoframe_init(struct hdmi_drm_infoframe *frame);
 ssize_t hdmi_drm_infoframe_pack(struct hdmi_drm_infoframe *frame, void *buffer, size_t size);
+
+/* 4.4.302 enum hdmi_infoframe_type 에 DRM(HDR) 타입 부재 → 보강 */
+#ifndef _BPI_HDMI_TYPE_DRM
+#define _BPI_HDMI_TYPE_DRM
+#define HDMI_INFOFRAME_TYPE_DRM        0x87
+#define HDMI_PACKET_TYPE_GENERAL_CONTROL 0x03
+#define HDMI_PACKET_TYPE_GAMUT_METADATA  0x0a
+#endif
+
 #endif /* HDMI_EOTF_TRADITIONAL_GAMMA_SDR */
 
 #endif /* _BPI_LINUX_HDMI_H */
