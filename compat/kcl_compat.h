@@ -366,7 +366,7 @@ static inline void device_link_remove(void *consumer,
 #define SG_CHAIN 0x01UL
 #endif
 
-/* --- dma_resv: dma_resv_lock_slow_interruptible (5.x) --- */
+/* --- dma_resv: 5.x API (4.4.302 reservation_object 래핑) --- */
 #include <linux/reservation.h>
 static inline int
 dma_resv_lock_slow_interruptible(struct reservation_object *obj,
@@ -374,6 +374,65 @@ dma_resv_lock_slow_interruptible(struct reservation_object *obj,
 {
     return ww_mutex_lock_slow_interruptible(&obj->lock, ctx);
 }
+static inline void
+dma_resv_lock_slow(struct reservation_object *obj,
+                   struct ww_acquire_ctx *ctx)
+{
+    ww_mutex_lock_slow(&obj->lock, ctx);
+}
+static inline struct ww_acquire_ctx *
+dma_resv_locking_ctx(struct reservation_object *obj)
+{
+    return obj->lock.ctx;
+}
+static inline bool dma_resv_is_locked(struct reservation_object *obj)
+{
+    return ww_mutex_is_locked(&obj->lock);
+}
+
+/* --- mm: GFP_TRANSHUGE_LIGHT (4.15+, 4.4에서는 GFP_TRANSHUGE 사용) --- */
+#ifndef GFP_TRANSHUGE_LIGHT
+#define GFP_TRANSHUGE_LIGHT GFP_TRANSHUGE
+#endif
+
+/* --- vm: vmf_insert_pfn / vmf_insert_mixed (4.14+) --- */
+#include <linux/mm.h>
+#ifndef vmf_insert_pfn
+static inline vm_fault_t vmf_insert_pfn(struct vm_area_struct *vma,
+                                         unsigned long addr, unsigned long pfn)
+{
+    int err = vm_insert_pfn(vma, addr, pfn);
+    if (err == -ENOMEM) return VM_FAULT_OOM;
+    if (err) return VM_FAULT_SIGBUS;
+    return VM_FAULT_NOPAGE;
+}
+#endif
+#ifndef vmf_insert_mixed
+static inline vm_fault_t vmf_insert_mixed(struct vm_area_struct *vma,
+                                           unsigned long addr, pfn_t pfn)
+{
+    int err = vm_insert_mixed(vma, addr, pfn);
+    if (err == -ENOMEM) return VM_FAULT_OOM;
+    if (err) return VM_FAULT_SIGBUS;
+    return VM_FAULT_NOPAGE;
+}
+#endif
+
+/* --- list: list_bulk_move_tail (4.20+) --- */
+#ifndef list_bulk_move_tail
+static inline void list_bulk_move_tail(struct list_head *head,
+                                       struct list_head *first,
+                                       struct list_head *last)
+{
+    /* 단순 재연결: first..last 구간을 head 앞으로 이동 */
+    first->prev->next = last->next;
+    last->next->prev  = first->prev;
+    head->prev->next  = first;
+    first->prev       = head->prev;
+    last->next        = head;
+    head->prev        = last;
+}
+#endif
 
 /* --- pci: resizable BAR (added ~4.15) — stub out (disable rebar) --- */
 #include <linux/pci.h>
