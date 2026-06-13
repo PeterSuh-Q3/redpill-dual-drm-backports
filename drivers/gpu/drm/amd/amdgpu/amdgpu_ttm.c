@@ -32,7 +32,9 @@
 
 #include <linux/dma-mapping.h>
 #include <linux/iommu.h>
+#if IS_ENABLED(CONFIG_HMM_MIRROR)
 #include <linux/hmm.h>
+#endif
 #include <linux/pagemap.h>
 #include <linux/sched/task.h>
 #include <linux/seq_file.h>

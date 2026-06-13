@@ -25,7 +25,9 @@
 #define __AMDGPU_MN_H__
 
 #include <linux/types.h>
+#if IS_ENABLED(CONFIG_HMM_MIRROR)
 #include <linux/hmm.h>
+#endif
 #include <linux/rwsem.h>
 #include <linux/workqueue.h>
 #include <linux/interval_tree.h>
