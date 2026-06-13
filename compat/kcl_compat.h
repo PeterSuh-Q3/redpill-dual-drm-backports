@@ -263,6 +263,106 @@ struct rcu_work;
        *(old) == _o; })
 #endif
 
+/* --- wait_queue_entry_t: renamed from wait_queue_t in 4.13 --- */
+#include <linux/wait.h>
+#ifndef wait_queue_entry_t
+typedef wait_queue_t wait_queue_entry_t;
+#endif
+#ifndef init_wait_entry
+#define init_wait_entry(entry, flags) init_waitqueue_entry(entry, current)
+#endif
+
+/* --- xarray: xa_alloc + xa_limit_32b (add to existing xarray.h shim) --- */
+#ifndef xa_limit_32b
+#define xa_limit_32b ((struct xa_limit){ .max = 0xfffffffeUL, .min = 0 })
+struct xa_limit { unsigned long min, max; };
+static inline int xa_alloc(struct xarray *xa, u32 *id, void *entry,
+                            struct xa_limit limit, gfp_t gfp)
+{
+    unsigned long flags;
+    unsigned long idx;
+    int ret;
+    spin_lock_irqsave(&xa->xa_lock, flags);
+    /* Use bitmap/idr approach: simple linear scan */
+    for (idx = limit.min; idx <= limit.max; idx++) {
+        if (!radix_tree_lookup(&xa->xa_head, idx)) {
+            ret = radix_tree_insert(&xa->xa_head, idx, entry);
+            if (!ret) { *id = idx; goto out; }
+        }
+    }
+    ret = -ENOSPC;
+out:
+    spin_unlock_irqrestore(&xa->xa_lock, flags);
+    return ret;
+}
+#endif
+
+/* --- math: DIV_ROUND_DOWN_ULL (5.x) --- */
+#ifndef DIV_ROUND_DOWN_ULL
+#define DIV_ROUND_DOWN_ULL(x, y) (div_u64((x), (y)))
+#endif
+
+/* --- memory encryption: mem_encrypt_active (4.14+) --- */
+#ifndef mem_encrypt_active
+static inline bool mem_encrypt_active(void) { return false; }
+#endif
+
+/* --- file: file_clone_open (4.14+) --- */
+#include <linux/fs.h>
+#ifndef file_clone_open
+static inline struct file *file_clone_open(struct file *f)
+{
+    return get_file(f); /* simplified — no full clone, just bump refcount */
+}
+#endif
+
+/* --- dma_fence: dma_fence_get_stub (5.x) --- */
+#include <linux/dma-fence.h>
+#ifndef dma_fence_get_stub
+static inline struct dma_fence *dma_fence_get_stub(void)
+{
+    return dma_fence_get(NULL); /* returns NULL — callers check for NULL */
+}
+#endif
+
+/* --- kref: kref_put_lock (5.x) --- */
+#include <linux/kref.h>
+#ifndef kref_put_lock
+static inline int kref_put_lock(struct kref *kref,
+    void (*release)(struct kref *kref), spinlock_t *lock)
+{
+    return kref_put(kref, release);
+}
+#endif
+
+/* --- random: get_random_u32 (5.x) --- */
+#include <linux/random.h>
+#ifndef get_random_u32
+#define get_random_u32() (u32)(prandom_u32())
+#endif
+
+/* --- device links: device_link_add / device_link_remove (4.10+) --- */
+#include <linux/device.h>
+struct device_link;
+#ifndef device_link_add
+static inline struct device_link *device_link_add(struct device *consumer,
+    struct device *supplier, u32 flags) { return NULL; }
+static inline void device_link_remove(void *consumer,
+    struct device *supplier) { }
+#endif
+
+/* --- scatterlist: ensure SG_CHAIN is visible --- */
+#include <linux/scatterlist.h>
+
+/* --- dma_resv: dma_resv_lock_slow_interruptible (5.x) --- */
+#include <linux/reservation.h>
+static inline int
+dma_resv_lock_slow_interruptible(struct reservation_object *obj,
+                                 struct ww_acquire_ctx *ctx)
+{
+    return ww_mutex_lock_slow_interruptible(&obj->lock, ctx);
+}
+
 /* --- pci: resizable BAR (added ~4.15) — stub out (disable rebar) --- */
 #include <linux/pci.h>
 static inline void mshell_pci_release_resource(struct pci_dev *dev, int resno) { }
