@@ -426,6 +426,47 @@ static inline void list_bulk_move_tail(struct list_head *head,
 }
 #endif
 
+/* --- pci: PCIe atomics / bandwidth API (4.16+) — stub out --- */
+#include <linux/pci.h>
+#ifndef PCI_EXP_DEVCAP2_ATOMIC_COMP32
+#define PCI_EXP_DEVCAP2_ATOMIC_COMP32  0x00000080
+#define PCI_EXP_DEVCAP2_ATOMIC_COMP64  0x00000100
+#endif
+#ifndef pci_enable_atomic_ops_to_root
+static inline int pci_enable_atomic_ops_to_root(struct pci_dev *dev, u32 cap_mask)
+{
+    return -EINVAL; /* 4.4.302 미지원 → amdgpu는 non-fatal 처리 */
+}
+#endif
+#ifndef PCIE_SPEED_16_0GT
+#define PCIE_SPEED_2_5GT  0x14
+#define PCIE_SPEED_5_0GT  0x15
+#define PCIE_SPEED_8_0GT  0x16
+#define PCIE_SPEED_16_0GT 0x17
+enum pci_bus_speed;
+static inline enum pci_bus_speed pcie_get_speed_cap(struct pci_dev *dev)
+{
+    return (enum pci_bus_speed)0xff; /* PCI_SPEED_UNKNOWN */
+}
+static inline u32 pcie_bandwidth_available(struct pci_dev *dev,
+    struct pci_dev **limiting_dev, enum pci_bus_speed *speed,
+    enum pcie_link_width *width)
+{
+    if (speed)  *speed = (enum pci_bus_speed)0xff;
+    if (width)  *width = PCIE_LNK_WIDTH_UNKNOWN;
+    return 0;
+}
+#endif
+
+/* --- dma: dma_addressing_limited (4.12+) --- */
+#include <linux/dma-mapping.h>
+#ifndef dma_addressing_limited
+static inline bool dma_addressing_limited(struct device *dev)
+{
+    return !dma_supported(dev, DMA_BIT_MASK(64));
+}
+#endif
+
 /* --- pci: resizable BAR (added ~4.15) — stub out (disable rebar) --- */
 #include <linux/pci.h>
 static inline void mshell_pci_release_resource(struct pci_dev *dev, int resno) { }
