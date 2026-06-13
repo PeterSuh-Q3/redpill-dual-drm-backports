@@ -55,22 +55,39 @@ jobs:
           mkdir ksrc
           tar xf $dev_tarball -C ksrc
 
-      - name: "Build (전수 인벤토리: keep-going, -Wno-error)"
+      - name: "Build (i915 인벤토리: keep-going, -Wno-error)"
         run: |
           export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
           export CROSS_COMPILE=$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-
           export KBUILD_MODPOST_WARN=1
-          # 헤더 경로는 Makefile 의 LINUXINCLUDE(backport-include→vendor include→compat)가 처리.
-          # force-include(drm_compat.h) 제거 — drmP.h cascade 유발했었음.
+          export OOT_ROOT=$PWD
 
           echo "=== host KLIB DRM/I915 .config ==="
           grep -E '^CONFIG_DRM(_I915)?[ =]' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
 
-          # ★ 전수 인벤토리: -k(keep-going) 로 모든 파일 끝까지 컴파일,
-          #   KCFLAGS=-Wno-error 로 -Werror 조기중단 방지 → 전체 gap 을 1회에 수집.
-          make -k -C "$KLIB_BUILD" M=$PWD \
+          # ★Step4 = i915 단독이지만 빌드 대상은 repo root(M=$OOT_ROOT) 다.
+          # i915 서브트리만(M=.../i915) 빌드하면 5.4 DRM core(drivers/gpu/drm/*.c)가
+          # 빠져 i915 가 host 4.4.302 의 구형 drm 헤더(drm_gem_object.resv 부재 등)를
+          # 보게 되어 수천 건의 구조체 멤버/타입 에러가 난다(설계 위배).
+          # 최상위 Makefile 이 LINUXINCLUDE 에 vendor 5.4 include/ 를 prepend 하고
+          # `obj-y += drivers/gpu/drm/` 로 drm core + i915 를 CONFIG 게이팅으로 함께
+          # 빌드한다 → 5.4 drm 헤더가 우선 적용되어 cascade 가 근본 해소된다.
+          # drivers/gpu/drm/Makefile 은 vendor subset(core+ttm/scheduler/amd/i915)만
+          # 남기도록 정리되어 omapdrm/panel/tiny 등 "No rule to make target" 이 없다.
+          # KCPPFLAGS 는 compat force-include(-include) 전파용. -I 는 최상위 Makefile
+          # LINUXINCLUDE 가 권위이며 여기 -I 는 보조(중복 무해).
+          # -k 는 남은 API gap 을 한 번에 인벤토리하기 위해 유지한다.
+          export OOT_KCPPFLAGS="\
+            -I$OOT_ROOT/compat/backport-include \
+            -I$OOT_ROOT/include \
+            -I$OOT_ROOT/include/uapi \
+            -I$OOT_ROOT/compat \
+            -include $OOT_ROOT/compat/drm_compat.h \
+            -include $OOT_ROOT/compat/kcl_compat.h"
+          make -k -C "$KLIB_BUILD" M="$OOT_ROOT" \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
-            KCPPFLAGS="-include $PWD/compat/kcl_compat.h" KCFLAGS="-Wno-error" \
+            KCPPFLAGS="$OOT_KCPPFLAGS" \
+            KCFLAGS="-Wno-error" \
             modules 2>&1 | tee /tmp/build.log || true
 
           echo ""

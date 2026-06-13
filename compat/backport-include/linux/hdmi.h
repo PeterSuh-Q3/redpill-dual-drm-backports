@@ -55,8 +55,20 @@ struct hdr_sink_metadata {
 	};
 };
 
-int hdmi_drm_infoframe_init(struct hdmi_drm_infoframe *frame);
-ssize_t hdmi_drm_infoframe_pack(struct hdmi_drm_infoframe *frame, void *buffer, size_t size);
+#define HDMI_DRM_INFOFRAME_SIZE 26
+static inline int hdmi_drm_infoframe_init(struct hdmi_drm_infoframe *frame)
+{
+	memset(frame, 0, sizeof(*frame));
+	frame->type    = HDMI_INFOFRAME_TYPE_DRM;
+	frame->version = 1;
+	frame->length  = HDMI_DRM_INFOFRAME_SIZE;
+	return 0;
+}
+static inline ssize_t hdmi_drm_infoframe_pack(struct hdmi_drm_infoframe *frame,
+					      void *buffer, size_t size)
+{
+	return 0; /* HDR infoframe packing stub — headless DSM 환경에서 미사용 */
+}
 static inline int hdmi_drm_infoframe_check(struct hdmi_drm_infoframe *frame)
 {
 	return 0;
