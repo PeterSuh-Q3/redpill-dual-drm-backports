@@ -819,11 +819,7 @@ static void gmbus_unlock_bus(struct i2c_adapter *adapter,
 	mutex_unlock(&dev_priv->gmbus_mutex);
 }
 
-static const struct i2c_lock_operations gmbus_lock_ops = {
-	.lock_bus =    gmbus_lock_bus,
-	.trylock_bus = gmbus_trylock_bus,
-	.unlock_bus =  gmbus_unlock_bus,
-};
+/* i2c_lock_operations not in 4.4.302: gmbus_lock_ops struct removed */
 
 /**
  * intel_gmbus_setup - instantiate all Intel i2c GMBuses
@@ -868,7 +864,7 @@ int intel_gmbus_setup(struct drm_i915_private *dev_priv)
 		bus->dev_priv = dev_priv;
 
 		bus->adapter.algo = &gmbus_algorithm;
-		bus->adapter.lock_ops = &gmbus_lock_ops;
+		/* bus->adapter.lock_ops: i2c_lock_operations not in 4.4.302, skipped */
 
 		/*
 		 * We wish to retry with bit banging

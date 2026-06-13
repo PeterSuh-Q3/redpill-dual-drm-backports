@@ -1003,11 +1003,7 @@ static void unlock_bus(struct i2c_adapter *i2c, unsigned int flags)
 	mutex_unlock(&i2c_to_aux(i2c)->hw_mutex);
 }
 
-static const struct i2c_lock_operations drm_dp_i2c_lock_ops = {
-	.lock_bus = lock_bus,
-	.trylock_bus = trylock_bus,
-	.unlock_bus = unlock_bus,
-};
+/* i2c_lock_operations not in 4.4.302: drm_dp_i2c_lock_ops struct removed */
 
 static int drm_dp_aux_get_crc(struct drm_dp_aux *aux, u8 *crc)
 {
@@ -1100,7 +1096,7 @@ void drm_dp_aux_init(struct drm_dp_aux *aux)
 	aux->ddc.algo_data = aux;
 	aux->ddc.retries = 3;
 
-	aux->ddc.lock_ops = &drm_dp_i2c_lock_ops;
+	/* aux->ddc.lock_ops: i2c_lock_operations not in 4.4.302, skipped */
 }
 EXPORT_SYMBOL(drm_dp_aux_init);
 

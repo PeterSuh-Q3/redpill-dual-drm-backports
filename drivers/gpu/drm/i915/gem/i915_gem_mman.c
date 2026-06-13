@@ -214,10 +214,10 @@ compute_partial_view(const struct drm_i915_gem_object *obj,
  * The current feature set supported by i915_gem_fault() and thus GTT mmaps
  * is exposed via I915_PARAM_MMAP_GTT_VERSION (see i915_gem_mmap_gtt_version).
  */
-vm_fault_t i915_gem_fault(struct vm_fault *vmf)
+/* 4.4.302: fault callback takes (vma, vmf) instead of (vmf) only */
+vm_fault_t i915_gem_fault(struct vm_area_struct *area, struct vm_fault *vmf)
 {
 #define MIN_CHUNK_PAGES (SZ_1M >> PAGE_SHIFT)
-	struct vm_area_struct *area = vmf->vma;
 	struct drm_i915_gem_object *obj = to_intel_bo(area->vm_private_data);
 	struct drm_device *dev = obj->base.dev;
 	struct drm_i915_private *i915 = to_i915(dev);
@@ -235,7 +235,7 @@ vm_fault_t i915_gem_fault(struct vm_fault *vmf)
 		return VM_FAULT_SIGBUS;
 
 	/* We don't use vmf->pgoff since that has the fake offset */
-	page_offset = (vmf->address - area->vm_start) >> PAGE_SHIFT;
+	page_offset = ((unsigned long)vmf->virtual_address - area->vm_start) >> PAGE_SHIFT;
 
 	trace_i915_gem_object_fault(obj, page_offset, true, write);
 

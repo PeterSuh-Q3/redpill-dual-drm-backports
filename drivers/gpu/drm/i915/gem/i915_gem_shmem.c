@@ -188,7 +188,7 @@ err_sg:
 	sg_mark_end(sg);
 err_pages:
 	mapping_clear_unevictable(mapping);
-	pagevec_init(&pvec);
+	pagevec_init(&pvec, 0);
 	for_each_sgt_page(page, sgt_iter, st) {
 		if (!pagevec_add(&pvec, page))
 			check_release_pagevec(&pvec);
@@ -306,7 +306,7 @@ shmem_put_pages(struct drm_i915_gem_object *obj, struct sg_table *pages)
 
 	mapping_clear_unevictable(file_inode(obj->base.filp)->i_mapping);
 
-	pagevec_init(&pvec);
+	pagevec_init(&pvec, 0);
 	for_each_sgt_page(page, sgt_iter, pages) {
 		if (obj->mm.dirty)
 			set_page_dirty(page);

@@ -803,7 +803,7 @@ intel_hdmi_compute_drm_infoframe(struct intel_encoder *encoder,
 				 struct intel_crtc_state *crtc_state,
 				 struct drm_connector_state *conn_state)
 {
-	struct hdmi_drm_infoframe *frame = &crtc_state->infoframes.drm.drm;
+	struct hdmi_drm_infoframe *frame = (struct hdmi_drm_infoframe *)&crtc_state->infoframes.drm;
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 	int ret;
 

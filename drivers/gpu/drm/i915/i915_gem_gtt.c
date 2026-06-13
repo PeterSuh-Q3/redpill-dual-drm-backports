@@ -329,7 +329,7 @@ static u64 iris_pte_encode(dma_addr_t addr,
 
 static void stash_init(struct pagestash *stash)
 {
-	pagevec_init(&stash->pvec);
+	pagevec_init(&stash->pvec, 0);
 	spin_lock_init(&stash->lock);
 }
 
@@ -390,7 +390,7 @@ static struct page *vm_alloc_page(struct i915_address_space *vm, gfp_t gfp)
 	 * So we add our WB pages into a temporary pvec on the stack and merge
 	 * them into the WC stash after all the allocations are complete.
 	 */
-	pagevec_init(&stack);
+	pagevec_init(&stack, 0);
 	do {
 		struct page *page;
 

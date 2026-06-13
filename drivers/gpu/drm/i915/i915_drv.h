@@ -2343,7 +2343,7 @@ int i915_gem_wait_for_idle(struct drm_i915_private *dev_priv,
 void i915_gem_suspend(struct drm_i915_private *dev_priv);
 void i915_gem_suspend_late(struct drm_i915_private *dev_priv);
 void i915_gem_resume(struct drm_i915_private *dev_priv);
-vm_fault_t i915_gem_fault(struct vm_fault *vmf);
+vm_fault_t i915_gem_fault(struct vm_area_struct *vma, struct vm_fault *vmf);
 
 int i915_gem_open(struct drm_i915_private *i915, struct drm_file *file);
 void i915_gem_release(struct drm_device *dev, struct drm_file *file);

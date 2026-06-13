@@ -534,15 +534,17 @@ EXPORT_SYMBOL(drm_dev_unplug);
 static int drm_fs_cnt;
 static struct vfsmount *drm_fs_mnt;
 
-static int drm_fs_init_fs_context(struct fs_context *fc)
+/* 4.4.302 backport: use mount_pseudo instead of init_fs_context (4.18+ only) */
+static struct dentry *drm_fs_mount(struct file_system_type *fs_type, int flags,
+				   const char *dev_name, void *data)
 {
-	return init_pseudo(fc, 0x010203ff) ? 0 : -ENOMEM;
+	return mount_pseudo(fs_type, "drm:", NULL, NULL, 0x010203ff);
 }
 
 static struct file_system_type drm_fs_type = {
 	.name		= "drm",
 	.owner		= THIS_MODULE,
-	.init_fs_context = drm_fs_init_fs_context,
+	.mount		= drm_fs_mount,
 	.kill_sb	= kill_anon_super,
 };
 

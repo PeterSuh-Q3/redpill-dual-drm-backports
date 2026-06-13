@@ -85,9 +85,12 @@ __i915_gem_userptr_set_active(struct drm_i915_gem_object *obj, bool value)
 	spin_unlock(&mo->mn->lock);
 }
 
+/* 4.4.302 mmu_notifier API: 3-arg (mm, start, end), not struct mmu_notifier_range */
 static int
 userptr_mn_invalidate_range_start(struct mmu_notifier *_mn,
-				  const struct mmu_notifier_range *range)
+				  struct mm_struct *mm,
+				  unsigned long range_start,
+				  unsigned long range_end)
 {
 	struct i915_mmu_notifier *mn =
 		container_of(_mn, struct i915_mmu_notifier, mn);
@@ -100,17 +103,14 @@ userptr_mn_invalidate_range_start(struct mmu_notifier *_mn,
 		return 0;
 
 	/* interval ranges are inclusive, but invalidate range is exclusive */
-	end = range->end - 1;
+	end = range_end - 1;
 
 	spin_lock(&mn->lock);
-	it = interval_tree_iter_first(&mn->objects, range->start, end);
+	it = interval_tree_iter_first(&mn->objects, range_start, end);
 	while (it) {
 		struct drm_i915_gem_object *obj;
 
-		if (!mmu_notifier_range_blockable(range)) {
-			ret = -EAGAIN;
-			break;
-		}
+		/* mmu_notifier_range_blockable: 4.4.302 always blockable */
 
 		/*
 		 * The mmu_object is released late when destroying the
@@ -124,7 +124,7 @@ userptr_mn_invalidate_range_start(struct mmu_notifier *_mn,
 		 */
 		obj = container_of(it, struct i915_mmu_object, it)->obj;
 		if (!kref_get_unless_zero(&obj->base.refcount)) {
-			it = interval_tree_iter_next(it, range->start, end);
+			it = interval_tree_iter_next(it, range_start, end);
 			continue;
 		}
 		spin_unlock(&mn->lock);
@@ -164,7 +164,7 @@ userptr_mn_invalidate_range_start(struct mmu_notifier *_mn,
 		 * over this range, there is no guarantee that this search will
 		 * terminate given a pathologic workload.
 		 */
-		it = interval_tree_iter_first(&mn->objects, range->start, end);
+		it = interval_tree_iter_first(&mn->objects, range_start, end);
 	}
 	spin_unlock(&mn->lock);
 

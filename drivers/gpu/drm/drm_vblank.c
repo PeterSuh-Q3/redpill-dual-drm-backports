@@ -178,7 +178,7 @@ static void drm_reset_vblank_timestamp(struct drm_device *dev, unsigned int pipe
 	 * interrupt and assign 0 for now, to mark the vblanktimestamp as invalid.
 	 */
 	if (!rc)
-		t_vblank = 0;
+		t_vblank = ktime_set(0, 0);
 
 	/*
 	 * +1 to make sure user will never see the same
@@ -286,7 +286,7 @@ static void drm_update_vblank_count(struct drm_device *dev, unsigned int pipe,
 	 * for now, to mark the vblanktimestamp as invalid.
 	 */
 	if (!rc && !in_vblank_irq)
-		t_vblank = 0;
+		t_vblank = ktime_set(0, 0);
 
 	store_vblank(dev, pipe, diff, t_vblank, cur_vblank);
 }
@@ -794,7 +794,7 @@ static u64 drm_vblank_count_and_time(struct drm_device *dev, unsigned int pipe,
 	unsigned int seq;
 
 	if (WARN_ON(pipe >= dev->num_crtcs)) {
-		*vblanktime = 0;
+		*vblanktime = ktime_set(0, 0);
 		return 0;
 	}
 

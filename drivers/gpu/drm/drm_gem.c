@@ -593,7 +593,7 @@ struct page **drm_gem_get_pages(struct drm_gem_object *obj)
 
 fail:
 	mapping_clear_unevictable(mapping);
-	pagevec_init(&pvec);
+	pagevec_init(&pvec, 0);
 	while (i--) {
 		if (!pagevec_add(&pvec, pages[i]))
 			drm_gem_check_release_pagevec(&pvec);
@@ -631,7 +631,7 @@ void drm_gem_put_pages(struct drm_gem_object *obj, struct page **pages,
 
 	npages = obj->size >> PAGE_SHIFT;
 
-	pagevec_init(&pvec);
+	pagevec_init(&pvec, 0);
 	for (i = 0; i < npages; i++) {
 		if (!pages[i])
 			continue;
