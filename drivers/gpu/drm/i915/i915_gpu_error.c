@@ -199,7 +199,7 @@ static int pool_init(struct pagevec *pv, gfp_t gfp)
 {
 	int err;
 
-	pagevec_init(pv);
+	pagevec_init(pv, 0);
 
 	err = pool_refill(pv, gfp);
 	if (err)

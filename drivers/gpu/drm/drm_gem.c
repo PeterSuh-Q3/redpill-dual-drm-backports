@@ -524,7 +524,7 @@ EXPORT_SYMBOL(drm_gem_create_mmap_offset);
  */
 static void drm_gem_check_release_pagevec(struct pagevec *pvec)
 {
-	check_move_unevictable_pages(pvec);
+	check_move_unevictable_pages(pvec->pages, pvec->nr);
 	__pagevec_release(pvec);
 	cond_resched();
 }
