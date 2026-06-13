@@ -1,0 +1,107 @@
+name: "[VERIFY] geminilake-7.3-4.4.302 모듈 의존성 검증"
+
+# module-output 브랜치의 19개 .ko 를 geminilake 7.3 KLIB Module.symvers 기준으로
+# 심볼 의존성 검증. 미충족 심볼(커널 미제공) 및 모듈 간 순환/누락 탐지.
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout module-output branch
+        uses: actions/checkout@v4
+        with:
+          ref: module-output
+          fetch-depth: 1
+
+      - name: Cache toolkit tarballs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ds.geminilake-7.3.dev.txz
+          key: toolkit-geminilake-7.3
+
+      - name: Download kernel source (KLIB)
+        run: |
+          dev_tarball=ds.geminilake-7.3.dev.txz
+          if [ -f "$dev_tarball" ]; then echo "[cache] $dev_tarball"; else
+            wget -q https://global.synologydownload.com/download/ToolChain/toolkit/7.3/geminilake/ds.geminilake-7.3.dev.txz
+          fi
+          mkdir ksrc
+          tar xf $dev_tarball -C ksrc
+          KLIB=ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-7.3/build
+          echo "KLIB=$KLIB" >> $GITHUB_ENV
+          echo "SYMVERS=$KLIB/Module.symvers" >> $GITHUB_ENV
+
+      - name: Verify module symbols
+        run: |
+          KODIR="thirdparty/geminilake-7.3-4.4.302"
+          echo "=== 검증 대상 .ko ==="
+          ls $KODIR/*.ko | xargs -I{} basename {}
+
+          echo ""
+          echo "=== [1] modinfo: depends 관계 ==="
+          for ko in $KODIR/*.ko; do
+            dep=$(modinfo "$ko" 2>/dev/null | grep "^depends:" | sed 's/depends:\s*//')
+            printf "  %-40s depends: %s\n" "$(basename $ko)" "${dep:-(없음)}"
+          done
+
+          echo ""
+          echo "=== [2] 모듈 내 exported symbols 집합 구축 ==="
+          for ko in $KODIR/*.ko; do
+            nm "$ko" 2>/dev/null | grep -oE '__ksymtab_[A-Za-z0-9_]+' | sed 's/__ksymtab_//'
+          done | sort -u > /tmp/ko_exports.txt
+          echo "  모듈 간 exported symbols: $(wc -l < /tmp/ko_exports.txt)개"
+
+          echo ""
+          echo "=== [3] 커널 exported symbols (Module.symvers) ==="
+          awk '{print $2}' "$SYMVERS" | sort -u > /tmp/kernel_exports.txt
+          echo "  커널 exported symbols: $(wc -l < /tmp/kernel_exports.txt)개"
+
+          echo ""
+          echo "=== [4] 모듈별 undefined symbol 검증 ==="
+          TOTAL_MISSING=0
+          for ko in $KODIR/*.ko; do
+            nm "$ko" 2>/dev/null | awk '$2=="U"{print $3}' | sort -u > /tmp/undef_ko.txt
+            # 모듈 내 or 커널 중 어느 쪽에도 없는 심볼
+            comm -23 /tmp/undef_ko.txt /tmp/ko_exports.txt > /tmp/not_in_modules.txt
+            comm -23 /tmp/not_in_modules.txt /tmp/kernel_exports.txt > /tmp/missing.txt
+            cnt=$(wc -l < /tmp/missing.txt)
+            if [ "$cnt" -gt 0 ]; then
+              echo "  [MISSING] $(basename $ko): $cnt 개 미충족 심볼"
+              cat /tmp/missing.txt | sed 's/^/    /'
+              TOTAL_MISSING=$((TOTAL_MISSING + cnt))
+            else
+              echo "  [OK]      $(basename $ko)"
+            fi
+          done
+
+          echo ""
+          echo "=== [5] 총 미충족 심볼 수: ${TOTAL_MISSING} ==="
+          if [ "$TOTAL_MISSING" -eq 0 ]; then
+            echo "  ✓ 모든 심볼 충족 — 실기 적재 가능"
+          else
+            echo "  ✗ 미충족 심볼 존재 — 검토 필요"
+          fi
+
+          echo ""
+          echo "=== [6] 모듈 간 의존성 DAG (depends 역방향) ==="
+          for ko in $KODIR/*.ko; do
+            modinfo "$ko" 2>/dev/null | grep "^depends:" | grep -v "depends:$" | \
+              awk -v m="$(basename $ko .ko)" '{print m " ← " $2}'
+          done
+
+          echo ""
+          echo "=== [7] vermagic 확인 ==="
+          for ko in $KODIR/*.ko; do
+            vm=$(modinfo "$ko" 2>/dev/null | grep "^vermagic:" | sed 's/vermagic:\s*//')
+            printf "  %-40s %s\n" "$(basename $ko)" "$vm"
+          done
