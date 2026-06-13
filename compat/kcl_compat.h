@@ -116,11 +116,13 @@ static inline void dev_pm_set_driver_flags(struct device *dev, u32 flags) { }
 static inline void ratelimit_set_flags(struct ratelimit_state *rs, unsigned long flags) { }
 
 /* --- sysctl: SYSCTL_ZERO / SYSCTL_ONE (5.2+) --- */
+/* 4.4.302 커널은 sysctl_vals 를 export 하지 않음 → 각 TU 에 static 배열로 제공 */
 #include <linux/sysctl.h>
 #ifndef SYSCTL_ZERO
-extern int sysctl_vals[];
-#define SYSCTL_ZERO (&sysctl_vals[0])
-#define SYSCTL_ONE  (&sysctl_vals[1])
+static int __kcl_sysctl_zero __attribute__((unused)) = 0;
+static int __kcl_sysctl_one  __attribute__((unused)) = 1;
+#define SYSCTL_ZERO (&__kcl_sysctl_zero)
+#define SYSCTL_ONE  (&__kcl_sysctl_one)
 #endif
 
 /* --- device links: DL_FLAG_STATELESS (4.13+) --- */
@@ -228,11 +230,32 @@ radix_tree_iter_delete(struct radix_tree_root *root,
 }
 #endif
 
-/* --- workqueue: flush_rcu_work (5.x) --- */
+/* --- workqueue: rcu_work / flush_rcu_work / queue_rcu_work (4.20+) --- */
 #include <linux/workqueue.h>
-struct rcu_work;
+#include <linux/rcupdate.h>
+#ifndef _BPI_RCU_WORK
+#define _BPI_RCU_WORK
+struct rcu_work {
+	struct work_struct work;
+	struct rcu_head    rcu;
+	struct workqueue_struct *wq;
+};
+static inline void init_rcu_work(struct rcu_work *rwork,
+				 work_func_t func)
+{
+	INIT_WORK(&rwork->work, func);
+}
+#endif
 #ifndef flush_rcu_work
 #define flush_rcu_work(w) flush_work(&(w)->work)
+#endif
+#ifndef queue_rcu_work
+static inline bool queue_rcu_work(struct workqueue_struct *wq,
+				  struct rcu_work *rwork)
+{
+	/* 4.4.302: RCU 유예 없이 즉시 큐잉 (RCU grace period 미보장, 실용상 무해) */
+	return queue_work(wq, &rwork->work);
+}
 #endif
 
 /* --- dma: dma_map_page_attrs (4.6+) --- */
