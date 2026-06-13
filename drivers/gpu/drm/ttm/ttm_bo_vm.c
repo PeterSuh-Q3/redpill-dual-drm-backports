@@ -271,11 +271,15 @@ static vm_fault_t ttm_bo_vm_fault(struct vm_area_struct *vma, struct vm_fault *v
 			pfn = page_to_pfn(page);
 		}
 
-		if (vma->vm_flags & VM_MIXEDMAP)
-			ret = vmf_insert_mixed(&cvma, address,
+		/* 4.4.302: vm_insert_mixed/pfn 직접 사용, vmf_insert_* shim 불필요 */
+		if (vma->vm_flags & VM_MIXEDMAP) {
+			int _err = vm_insert_mixed(&cvma, address,
 					__pfn_to_pfn_t(pfn, PFN_DEV));
-		else
-			ret = vmf_insert_pfn(&cvma, address, pfn);
+			ret = _err ? VM_FAULT_SIGBUS : VM_FAULT_NOPAGE;
+		} else {
+			int _err = vm_insert_pfn(&cvma, address, pfn);
+			ret = _err ? VM_FAULT_SIGBUS : VM_FAULT_NOPAGE;
+		}
 
 		/* Never error on prefaulted PTEs */
 		if (unlikely((ret & VM_FAULT_ERROR))) {
