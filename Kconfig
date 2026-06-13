@@ -86,11 +86,13 @@ config DRM_BACKPORT_COMPAT
 	  Makefile 에서 obj-$(CONFIG_DRM_BACKPORT_COMPAT) += compat/ 로 연결.
 
 config DRM_I915_CML_HS
-	bool "CML-H/S Cherry-pick 활성화 [신설]"
+	bool "CML-H/S Cherry-pick 활성화 [신설/obsolete-v5.4]"
 	depends on DRM_I915
-	default y
+	default n
 	help
-	  Comet Lake-H/S PCI Device ID cherry-pick (5.5-rc1) 활성화.
+	  Comet Lake-H/S PCI Device ID cherry-pick (5.5-rc1).
+	  ★ v5.4 vendor 는 CML-H/S ID 를 이미 네이티브 포함 → no-op.
+	  근거: patches/CML-HS-FINDING.md. (다른 base bump 시 재평가)
 
 config DRM_I915_CML_S_VGA
 	bool "CML-S VGA 아날로그 출력"
