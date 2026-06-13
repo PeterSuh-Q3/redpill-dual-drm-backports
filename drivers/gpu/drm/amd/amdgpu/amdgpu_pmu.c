@@ -82,7 +82,7 @@ static void amdgpu_perf_start(struct perf_event *event, int flags)
 		break;
 	}
 
-	perf_event_update_userpage(event);
+	/* perf_event_update_userpage: DSM 4.4.302 미export — skip */
 
 }
 
@@ -190,7 +190,7 @@ static void amdgpu_perf_del(struct perf_event *event, int flags)
 		break;
 	};
 
-	perf_event_update_userpage(event);
+	/* perf_event_update_userpage: DSM 4.4.302 미export — skip */
 }
 
 /* vega20 pmus */
