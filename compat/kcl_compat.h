@@ -32,8 +32,12 @@
 #define release_pages(pages, nr) release_pages(pages, nr, false)
 #endif
 
-/* --- reservation: _lock_interruptible (added ~4.13) --- */
+/* --- reservation / dma_resv: force-include shim before any amdgpu header --- */
 #include <linux/reservation.h>
+/* dma-resv.h shim defines dma_resv → reservation_object macro.
+ * Must be included here (force-included) so that struct dma_resv is never
+ * seen as a separate forward-declared tag before the macro is defined. */
+#include <linux/dma-resv.h>
 static inline int
 mshell_reservation_object_lock_interruptible(struct reservation_object *obj,
 					     struct ww_acquire_ctx *ctx)
@@ -476,5 +480,10 @@ static inline int  mshell_pci_resize_resource(struct pci_dev *dev, int resno, in
 }
 #define pci_release_resource(dev, resno)        mshell_pci_release_resource(dev, resno)
 #define pci_resize_resource(dev, resno, size)   mshell_pci_resize_resource(dev, resno, size)
+
+/* --- mm: untagged_addr (arm64 tagged pointer removal, x86 is no-op) --- */
+#ifndef untagged_addr
+#define untagged_addr(addr) (addr)
+#endif
 
 #endif /* _MSHELL_KCL_COMPAT_H */
