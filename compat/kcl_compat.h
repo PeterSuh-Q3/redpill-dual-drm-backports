@@ -150,6 +150,35 @@ static inline void cpuhp_remove_multi_state(int state) { }
 #include <linux/pm_runtime.h>
 static inline u64 pm_runtime_suspended_time(struct device *dev) { return 0; }
 
+/* --- MODULE_FIRMWARE / MODULE_PARM_DESC: Synology 4.4.302 fails on string
+ * concatenation args. Replace with no-ops (modinfo annotations only). */
+#include <linux/module.h>
+#ifdef MODULE_FIRMWARE
+#undef MODULE_FIRMWARE
+#endif
+#define MODULE_FIRMWARE(_fw) /* noop */
+
+/* --- math: DIV64_U64_ROUND_UP (5.2+) --- */
+#ifndef DIV64_U64_ROUND_UP
+#define DIV64_U64_ROUND_UP(x, y) div64_u64((x) + (y) - 1, (y))
+#endif
+
+/* --- wait: wake_up_var / wait_var_event_killable (4.19+) --- */
+#include <linux/wait.h>
+#ifndef wake_up_var
+#define wake_up_var(var) wake_up_bit(var, 0)
+#define wait_var_event_killable(var, cond) \
+    wait_on_bit(var, 0, TASK_KILLABLE)
+#define init_var_waiter(wq) /* noop */
+#endif
+
+/* --- refcount: refcount_dec_and_lock_irqsave (5.1+) --- */
+#include <linux/refcount.h>
+#ifndef refcount_dec_and_lock_irqsave
+#define refcount_dec_and_lock_irqsave(r, lock, flags) \
+    ({ (void)(flags); refcount_dec_and_lock(r, lock); })
+#endif
+
 /* --- pci: resizable BAR (added ~4.15) — stub out (disable rebar) --- */
 #include <linux/pci.h>
 static inline void mshell_pci_release_resource(struct pci_dev *dev, int resno) { }
