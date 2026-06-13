@@ -55,45 +55,37 @@ jobs:
           mkdir ksrc
           tar xf $dev_tarball -C ksrc
 
-      - name: Build (i915 단독, plain CONFIG)
+      - name: "Build (전수 인벤토리: keep-going, -Wno-error)"
         run: |
           export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
           export CROSS_COMPILE=$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-
           export KBUILD_MODPOST_WARN=1
-
-          # compat 헤더 OOT 전파(KCPPFLAGS): drm 공통 + i915 전용 shim force-include
           COMPAT="-I$PWD/compat -I$PWD/include -include $PWD/compat/drm_compat.h"
 
           echo "=== host KLIB DRM/I915 .config ==="
           grep -E '^CONFIG_DRM(_I915)?[ =]' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
 
-          OUT_MODULES=$PWD/out/modules
-          mkdir -p $OUT_MODULES
-
-          # i915 단독: amdgpu/ttm/sched off
-          make -C "$KLIB_BUILD" M=$PWD \
+          # ★ 전수 인벤토리: -k(keep-going) 로 모든 파일 끝까지 컴파일,
+          #   KCFLAGS=-Wno-error 로 -Werror 조기중단 방지 → 전체 gap 을 1회에 수집.
+          make -k -C "$KLIB_BUILD" M=$PWD \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
-            KCPPFLAGS="$COMPAT" \
-            modules 2>&1 | tee /tmp/build.log
-          BUILD_RC=${PIPESTATUS[0]}
-          echo "=== 빌드 로그 마지막 60줄 ==="
-          tail -60 /tmp/build.log
-          echo "=== 에러 요약 (error|undefined|redefinition|conflicting) ==="
-          grep -nE 'error:|undefined|redefinition|conflicting|No such file' /tmp/build.log | head -40 || echo "(에러 패턴 없음)"
+            KCPPFLAGS="$COMPAT" KCFLAGS="-Wno-error" \
+            modules 2>&1 | tee /tmp/build.log || true
 
-          make -C "$KLIB_BUILD" M=$PWD \
-            CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
-            INSTALL_MOD_PATH=$PWD/out/inter INSTALL_MOD_STRIP=1 CONFIG_MODULE_SIG_ALL= \
-            _emodinst_ 2>/dev/null || true
-          find $PWD/out/inter -type f -name '*.ko' -exec mv {} $OUT_MODULES \; 2>/dev/null || true
-
-          echo "=== 산출 .ko 목록 ==="
-          ls -1 out/modules/*.ko 2>/dev/null | xargs -n1 basename || echo "(없음)"
-
-          if [[ $BUILD_RC -ne 0 ]]; then
-            echo "::error::i915 빌드 실패 (exit $BUILD_RC) — 로그/에러요약 참조"
-            exit $BUILD_RC
-          fi
+          echo ""
+          echo "################ 전수 에러 인벤토리 ################"
+          echo "=== [1] 에러 총수 ==="
+          grep -cE ': error:' /tmp/build.log || echo 0
+          echo "=== [2] 에러난 소스 파일별 건수 ==="
+          grep -oE '[a-zA-Z0-9_/.-]+\.[ch]:[0-9]+: error' /tmp/build.log | sed -E 's/:[0-9]+: error//' | sort | uniq -c | sort -rn | head -40
+          echo "=== [3] 에러 메시지 유형별(식별자 마스킹) ==="
+          grep -oE 'error: .*' /tmp/build.log | sed -E "s/'[^']*'/'X'/g; s/[0-9]+/N/g" | sort | uniq -c | sort -rn | head -30
+          echo "=== [4] undeclared/no member/implicit 식별자 고유 목록 ==="
+          grep -oE "'[A-Za-z_][A-Za-z0-9_]*' (undeclared|undeclared here|has no member named|implicit declaration)" /tmp/build.log \
+            | sort -u | head -120
+          echo "=== [5] 'has no member named X' (구조체 멤버 gap) ==="
+          grep -oE "has no member named '[A-Za-z0-9_]*'" /tmp/build.log | sort | uniq -c | sort -rn | head -40
+          echo "###################################################"
 
       - name: "[VERIFY] host 중복 export 점검"
         if: always()
