@@ -142,7 +142,7 @@ int dma_fence_signal_locked(struct dma_fence *fence)
 
 	fence->timestamp = ktime_get();
 	set_bit(DMA_FENCE_FLAG_TIMESTAMP_BIT, &fence->flags);
-	trace_dma_fence_signaled(fence);
+	/* trace_dma_fence_signaled: DSM 4.4.302 미export — skip */
 
 	list_for_each_entry_safe(cur, tmp, &cb_list, node) {
 		INIT_LIST_HEAD(&cur->node);

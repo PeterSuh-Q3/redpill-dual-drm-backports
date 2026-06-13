@@ -492,10 +492,7 @@ static inline int  mshell_pci_resize_resource(struct pci_dev *dev, int resno, in
 #define ACPI_VIDEO_NOTIFY_PROBE 0x81
 #endif
 
-/* --- dma_fence tracepoints: DSM 4.4.302 커널이 __tracepoint_dma_fence_* 미export --- */
-#include <linux/dma-fence.h>
-#undef trace_dma_fence_signaled
-static inline void trace_dma_fence_signaled(struct dma_fence *f) {}
+/* trace_dma_fence_signaled: dma-fence.c / intel_breadcrumbs.c 소스에서 직접 패치 (DSM 미export) */
 
 /* perf_event_update_userpage: amdgpu_pmu.c 소스에서 직접 패치 (DSM 미export) */
 
