@@ -84,6 +84,12 @@ _bpi_hdmi_infoframe_unpack(union hdmi_infoframe *frame, void *buffer, size_t siz
 }
 #define hdmi_infoframe_unpack(f, b, s) _bpi_hdmi_infoframe_unpack(f, b, s)
 
+/* hdmi_spd_infoframe_check / hdmi_vendor_infoframe_check: added ~5.0 */
+static inline int hdmi_spd_infoframe_check(struct hdmi_spd_infoframe *frame)
+{ return 0; }
+static inline int hdmi_vendor_infoframe_check(struct hdmi_vendor_infoframe *frame)
+{ return 0; }
+
 /* 4.4.302 enum hdmi_infoframe_type 에 DRM(HDR) 타입 부재 → 보강 */
 #ifndef _BPI_HDMI_TYPE_DRM
 #define _BPI_HDMI_TYPE_DRM

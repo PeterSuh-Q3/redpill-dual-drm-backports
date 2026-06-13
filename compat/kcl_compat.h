@@ -179,6 +179,90 @@ static inline u64 pm_runtime_suspended_time(struct device *dev) { return 0; }
     ({ (void)(flags); refcount_dec_and_lock(r, lock); })
 #endif
 
+/* --- xarray (4.20+): force-include shim so all files get xa_* --- */
+#include <linux/xarray.h>
+
+/* --- mm: totalram_pages() function (5.1+); 4.4 uses a global variable --- */
+#ifndef _BPI_TOTALRAM_PAGES_FN
+#define _BPI_TOTALRAM_PAGES_FN
+#define totalram_pages() (totalram_pages)
+#endif
+
+/* --- mm: mmgrab (4.11+) --- */
+#include <linux/sched.h>
+#ifndef mmgrab
+static inline void mmgrab(struct mm_struct *mm)
+{
+    atomic_inc(&mm->mm_count);
+}
+#endif
+
+/* --- i915: CONFIG_DRM_I915_USERFAULT_AUTOSUSPEND (not in 4.4) --- */
+#ifndef CONFIG_DRM_I915_USERFAULT_AUTOSUSPEND
+#define CONFIG_DRM_I915_USERFAULT_AUTOSUSPEND 0
+#endif
+
+/* --- vm: call_mmap (5.x VM API) --- */
+#ifndef call_mmap
+static inline int call_mmap(struct file *file, struct vm_area_struct *vma)
+{
+    return file->f_op->mmap(file, vma);
+}
+#endif
+
+/* --- rcu: rcu_swap_protected (4.19+) --- */
+#ifndef rcu_swap_protected
+#define rcu_swap_protected(rcu, ptr, cond) \
+    ({ typeof(ptr) _ptr = rcu_dereference_protected((rcu), (cond)); \
+       rcu_assign_pointer((rcu), (ptr)); _ptr; })
+#endif
+
+/* --- radix_tree: radix_tree_iter_delete (4.14+) --- */
+#include <linux/radix-tree.h>
+#ifndef radix_tree_iter_delete
+static inline void
+radix_tree_iter_delete(struct radix_tree_root *root,
+                       struct radix_tree_iter *iter, void **slot)
+{
+    radix_tree_delete(root, iter->index);
+}
+#endif
+
+/* --- workqueue: flush_rcu_work (5.x) --- */
+#include <linux/workqueue.h>
+struct rcu_work;
+#ifndef flush_rcu_work
+#define flush_rcu_work(w) flush_work(&(w)->work)
+#endif
+
+/* --- dma: dma_map_page_attrs (4.6+) --- */
+#include <linux/dma-mapping.h>
+#ifndef dma_map_page_attrs
+#define dma_map_page_attrs(dev, page, off, sz, dir, attr) \
+    dma_map_page(dev, page, off, sz, dir)
+#endif
+
+/* --- lockdep: lockdep_is_held_type / lockdep_assert_irqs_disabled (5.x) --- */
+#ifndef lockdep_is_held_type
+#define lockdep_is_held_type(lock, type) 1
+#endif
+#ifndef lockdep_assert_irqs_disabled
+#define lockdep_assert_irqs_disabled() do { } while (0)
+#endif
+
+/* --- time: time_after32 (5.x) --- */
+#ifndef time_after32
+#define time_after32(a, b) ((u32)(b) - (u32)(a) > (1U << 31))
+#endif
+
+/* --- atomic: try_cmpxchg (5.5+) --- */
+#ifndef try_cmpxchg
+#define try_cmpxchg(p, old, new) \
+    ({ typeof(*old) _o = *(old); \
+       *(old) = cmpxchg((p), _o, (new)); \
+       *(old) == _o; })
+#endif
+
 /* --- pci: resizable BAR (added ~4.15) — stub out (disable rebar) --- */
 #include <linux/pci.h>
 static inline void mshell_pci_release_resource(struct pci_dev *dev, int resno) { }
