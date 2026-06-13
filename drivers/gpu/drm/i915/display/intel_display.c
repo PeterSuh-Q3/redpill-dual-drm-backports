@@ -14265,7 +14265,7 @@ static int do_rps_boost(struct wait_queue_entry *_wait,
 
 	drm_crtc_vblank_put(wait->crtc);
 
-	list_del(&wait->wait.entry);
+	list_del(&wait->wait.task_list);
 	kfree(wait);
 	return 1;
 }
