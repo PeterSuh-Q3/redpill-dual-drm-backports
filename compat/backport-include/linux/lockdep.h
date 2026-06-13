@@ -7,4 +7,9 @@
 #define _BPI_HAVE_PIN_COOKIE
 struct pin_cookie { };
 #endif
+/* lockdep_unpin_lock: 4.4.302 = 1-arg macro; 5.4 uses 2-arg. Re-define with 2 args. */
+#ifdef lockdep_unpin_lock
+#undef lockdep_unpin_lock
+#endif
+#define lockdep_unpin_lock(l, c) do { (void)(l); (void)(c); } while (0)
 #endif

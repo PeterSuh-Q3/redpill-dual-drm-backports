@@ -87,6 +87,11 @@ out:
 #define reservation_object_copy_fences(dst, src) \
 	mshell_reservation_object_copy_fences(dst, src)
 
+/* --- i915 5.4-specific Kconfig strings absent in 4.4.302 --- */
+#ifndef CONFIG_DRM_I915_FORCE_PROBE
+#define CONFIG_DRM_I915_FORCE_PROBE ""
+#endif
+
 /* --- pci: resizable BAR (added ~4.15) — stub out (disable rebar) --- */
 #include <linux/pci.h>
 static inline void mshell_pci_release_resource(struct pci_dev *dev, int resno) { }

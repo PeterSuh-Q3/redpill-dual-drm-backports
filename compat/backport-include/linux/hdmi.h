@@ -57,6 +57,32 @@ struct hdr_sink_metadata {
 
 int hdmi_drm_infoframe_init(struct hdmi_drm_infoframe *frame);
 ssize_t hdmi_drm_infoframe_pack(struct hdmi_drm_infoframe *frame, void *buffer, size_t size);
+static inline int hdmi_drm_infoframe_check(struct hdmi_drm_infoframe *frame)
+{
+	return 0;
+}
+/* hdmi_infoframe_pack_only: added ~5.0, equivalent to pack without checksum invalidation */
+#ifndef hdmi_infoframe_pack_only
+#define hdmi_infoframe_pack_only(frame, buf, size) hdmi_infoframe_pack(frame, buf, size)
+#endif
+/* hdmi_avi_infoframe_check: added ~5.0; validates AVI infoframe fields */
+static inline int hdmi_avi_infoframe_check(struct hdmi_avi_infoframe *frame)
+{
+	return 0;
+}
+/* hdmi_infoframe_unpack: 5.0 added size arg; 4.4 proto uses 2-arg.
+ * Variadic macro to absorb the extra argument silently. */
+#ifdef hdmi_infoframe_unpack
+#undef hdmi_infoframe_unpack
+#endif
+/* Prototype already in include_next — wrap to drop 3rd arg */
+static inline int
+_bpi_hdmi_infoframe_unpack(union hdmi_infoframe *frame, void *buffer, size_t size)
+{
+	(void)size;
+	return hdmi_infoframe_unpack(frame, buffer);
+}
+#define hdmi_infoframe_unpack(f, b, s) _bpi_hdmi_infoframe_unpack(f, b, s)
 
 /* 4.4.302 enum hdmi_infoframe_type 에 DRM(HDR) 타입 부재 → 보강 */
 #ifndef _BPI_HDMI_TYPE_DRM
