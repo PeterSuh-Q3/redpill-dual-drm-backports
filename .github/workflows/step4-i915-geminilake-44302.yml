@@ -62,7 +62,7 @@ jobs:
           export KBUILD_MODPOST_WARN=1
 
           # compat 헤더 OOT 전파(KCPPFLAGS): drm 공통 + i915 전용 shim force-include
-          COMPAT="-I$PWD/compat -I$PWD/include -include $PWD/compat/drm_compat.h -include $PWD/compat/i915_compat.h"
+          COMPAT="-I$PWD/compat -I$PWD/include -include $PWD/compat/drm_compat.h"
 
           echo "=== host KLIB DRM/I915 .config ==="
           grep -E '^CONFIG_DRM(_I915)?[ =]' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
