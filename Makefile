@@ -14,6 +14,13 @@
 KDIR ?= /lib/modules/$(shell uname -r)/build
 PWD  := $(shell pwd)
 
+# ── 헤더 우선순위 (★핵심: backport 인프라) ──
+# 5.4 drm 소스(.c)는 5.4 drm 헤더로 컴파일돼야 한다. 그러나 OOT M= 빌드에서
+# Kbuild 는 커널(4.4.302) include 를 먼저 탐색하므로 우리 vendor 5.4 헤더가 무시된다.
+# → LINUXINCLUDE 앞에 vendor include/ 와 compat/ 를 prepend 해 <drm/*.h> 가 5.4 로 해석되게 한다.
+#   (linux/·asm/ 등 그 외 헤더는 그대로 4.4.302 커널 것을 사용 = 의도된 동작)
+LINUXINCLUDE := -I$(src)/include -I$(src)/compat $(LINUXINCLUDE)
+
 # ── DRM 스택 (upstream 네이티브 descent) ──
 # drivers/gpu/drm/Makefile 이 CONFIG 로 drm.o / drm_kms_helper.o / ttm/ /
 # scheduler/(gpu-sched, §설계 Makefile 누락분 보완) / i915/ / amd/amdgpu/ 게이팅.
