@@ -43,7 +43,8 @@
 #include "i915_trace.h"
 #include "intel_pm.h"
 #include "intel_sideband.h"
-#include "../../../platform/x86/intel_ips.h"
+/* intel_ips.h not available in OOT build; declare needed symbol inline */
+extern void ips_link_to_i915_driver(void);
 
 /**
  * DOC: RC6

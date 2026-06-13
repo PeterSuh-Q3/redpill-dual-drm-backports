@@ -3203,11 +3203,7 @@ static void proxy_unlock_bus(struct i2c_adapter *adapter,
 	sdvo->i2c->lock_ops->unlock_bus(sdvo->i2c, flags);
 }
 
-static const struct i2c_lock_operations proxy_lock_ops = {
-	.lock_bus =    proxy_lock_bus,
-	.trylock_bus = proxy_trylock_bus,
-	.unlock_bus =  proxy_unlock_bus,
-};
+/* proxy_lock_ops: i2c_lock_operations not in 4.4.302, removed */
 
 static bool
 intel_sdvo_init_ddc_proxy(struct intel_sdvo *sdvo,
@@ -3221,7 +3217,7 @@ intel_sdvo_init_ddc_proxy(struct intel_sdvo *sdvo,
 	sdvo->ddc.dev.parent = &pdev->dev;
 	sdvo->ddc.algo_data = sdvo;
 	sdvo->ddc.algo = &intel_sdvo_ddc_proxy;
-	sdvo->ddc.lock_ops = &proxy_lock_ops;
+	/* lock_ops: i2c_lock_operations not in 4.4.302, skipped */
 
 	return i2c_add_adapter(&sdvo->ddc) == 0;
 }
