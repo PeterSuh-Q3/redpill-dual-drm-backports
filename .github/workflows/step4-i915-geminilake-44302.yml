@@ -70,7 +70,7 @@ jobs:
           #   KCFLAGS=-Wno-error 로 -Werror 조기중단 방지 → 전체 gap 을 1회에 수집.
           make -k -C "$KLIB_BUILD" M=$PWD \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
-            KCFLAGS="-Wno-error" \
+            KCPPFLAGS="-include $PWD/compat/kcl_compat.h" KCFLAGS="-Wno-error" \
             modules 2>&1 | tee /tmp/build.log || true
 
           echo ""

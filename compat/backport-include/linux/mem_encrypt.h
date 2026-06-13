@@ -1,9 +1,14 @@
-/* SPDX-License-Identifier: GPL-2.0 */
-/* backport shim: linux/mem_encrypt.h (SME/SEV, ~4.14 — 4.4.302 부재)
- * drm_gem.c / drm_vm.c 는 pgprot_decrypted 만 사용. 암호화 미지원 환경 = identity. */
-#ifndef _BPI_LINUX_MEM_ENCRYPT_H
-#define _BPI_LINUX_MEM_ENCRYPT_H
+/* Shim for <linux/mem_encrypt.h> (AMD SME, added ~4.14). 4.4.302 has no SME;
+ * pgprot_decrypted is identity on non-SME systems. */
+#ifndef _MSHELL_SHIM_LINUX_MEM_ENCRYPT_H
+#define _MSHELL_SHIM_LINUX_MEM_ENCRYPT_H
 #ifndef pgprot_decrypted
 #define pgprot_decrypted(prot) (prot)
+#endif
+#ifndef sme_active
+#define sme_active() 0
+#endif
+#ifndef mem_encrypt_active
+#define mem_encrypt_active() 0
 #endif
 #endif
