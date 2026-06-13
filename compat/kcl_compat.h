@@ -497,8 +497,6 @@ static inline int  mshell_pci_resize_resource(struct pci_dev *dev, int resno, in
 #undef trace_dma_fence_signaled
 static inline void trace_dma_fence_signaled(struct dma_fence *f) {}
 
-/* --- perf_event_update_userpage: DSM 4.4.302 커널 미export
- * extern 선언이 이미 있으므로 static inline 불가 → 매크로로 호출 사이트 무력화 */
-#define perf_event_update_userpage(event) do { (void)(event); } while (0)
+/* perf_event_update_userpage: amdgpu_pmu.c 소스에서 직접 패치 (DSM 미export) */
 
 #endif /* _MSHELL_KCL_COMPAT_H */
