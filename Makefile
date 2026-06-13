@@ -20,7 +20,10 @@ PWD  := $(shell pwd)
 # → LINUXINCLUDE 앞에 vendor include/ 와 compat/ 를 prepend 해 <drm/*.h> 가 5.4 로 해석되게 한다.
 #   (linux/·asm/ 등 그 외 헤더는 그대로 4.4.302 커널 것을 사용 = 의도된 동작)
 # backport-include(커널헤더 shim) 최우선 → vendor include(5.4 drm) → compat
-LINUXINCLUDE := -I$(src)/compat/backport-include -I$(src)/include -I$(src)/include/uapi -I$(src)/compat $(LINUXINCLUDE)
+# backport-include(shim) → vendor include/uapi(5.4 drm) → i915 루트(내부 헤더) → compat
+# i915 서브디렉토리(gt/gem/display) 파일이 "i915_drv.h" 등 루트 헤더를 찾도록 i915 루트 -I 추가.
+LINUXINCLUDE := -I$(src)/compat/backport-include -I$(src)/include -I$(src)/include/uapi \
+                -I$(src)/drivers/gpu/drm/i915 -I$(src)/compat $(LINUXINCLUDE)
 
 # ── DRM 스택 (upstream 네이티브 descent) ──
 # drivers/gpu/drm/Makefile 이 CONFIG 로 drm.o / drm_kms_helper.o / ttm/ /

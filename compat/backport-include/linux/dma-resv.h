@@ -24,6 +24,7 @@
 #define dma_resv_wait_timeout_rcu reservation_object_wait_timeout_rcu
 #define dma_resv_test_signaled_rcu reservation_object_test_signaled_rcu
 #define dma_resv_copy_fences     reservation_object_copy_fences
+#define dma_resv_get_excl_rcu    reservation_object_get_excl_rcu
 
 /* 5.4: dma_resv_reserve_shared(obj, num) — 4.4: reservation_object_reserve_shared(obj) */
 #define dma_resv_reserve_shared(obj, num) reservation_object_reserve_shared(obj)
