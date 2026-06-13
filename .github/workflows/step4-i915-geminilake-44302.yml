@@ -55,22 +55,25 @@ jobs:
           mkdir ksrc
           tar xf $dev_tarball -C ksrc
 
-      - name: "Build (전수 인벤토리: keep-going, -Wno-error)"
+      - name: "Build (i915 인벤토리: keep-going, -Wno-error)"
         run: |
           export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
           export CROSS_COMPILE=$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-
           export KBUILD_MODPOST_WARN=1
-          # 헤더 경로는 Makefile 의 LINUXINCLUDE(backport-include→vendor include→compat)가 처리.
-          # force-include(drm_compat.h) 제거 — drmP.h cascade 유발했었음.
+          export OOT_ROOT=$PWD
 
           echo "=== host KLIB DRM/I915 .config ==="
           grep -E '^CONFIG_DRM(_I915)?[ =]' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
 
-          # ★ 전수 인벤토리: -k(keep-going) 로 모든 파일 끝까지 컴파일,
-          #   KCFLAGS=-Wno-error 로 -Werror 조기중단 방지 → 전체 gap 을 1회에 수집.
-          make -k -C "$KLIB_BUILD" M=$PWD \
+          # Step4 는 i915 단독 검증이다. repo root(M=$PWD) 로 전체 DRM 트리를
+          # 내려가면 현재 vendor subset 에 없는 omapdrm/panel/tiny/...까지 탐색해
+          # "No rule to make target" 으로 실패하므로 i915 디렉터리만 대상으로 한다.
+          # 헤더 우선순위는 최상위 Makefile 과 동일하게 backport-include → vendor
+          # include/uapi → i915 루트 → compat 순서를 명시적으로 유지한다.
+          make -k -C "$KLIB_BUILD" M="$OOT_ROOT/drivers/gpu/drm/i915" \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
-            KCPPFLAGS="-include $PWD/compat/kcl_compat.h" 
+            KCPPFLAGS="-I$OOT_ROOT/compat/backport-include -I$OOT_ROOT/include -I$OOT_ROOT/include/uapi -I$OOT_ROOT/drivers/gpu/drm/i915 -I$OOT_ROOT/compat -include $OOT_ROOT/compat/drm_compat.h -include $OOT_ROOT/compat/kcl_compat.h" \
+            KCFLAGS="-Wno-error" \
             modules 2>&1 | tee /tmp/build.log || true
 
           echo ""
