@@ -70,9 +70,18 @@ jobs:
           # "No rule to make target" 으로 실패하므로 i915 디렉터리만 대상으로 한다.
           # 헤더 우선순위는 최상위 Makefile 과 동일하게 backport-include → vendor
           # include/uapi → i915 루트 → compat 순서를 명시적으로 유지한다.
+          # -k 는 i915 서브트리 내부의 남은 API gap 도 한 번에 인벤토리하기 위해 유지한다.
+          export OOT_KCPPFLAGS="\
+            -I$OOT_ROOT/compat/backport-include \
+            -I$OOT_ROOT/include \
+            -I$OOT_ROOT/include/uapi \
+            -I$OOT_ROOT/drivers/gpu/drm/i915 \
+            -I$OOT_ROOT/compat \
+            -include $OOT_ROOT/compat/drm_compat.h \
+            -include $OOT_ROOT/compat/kcl_compat.h"
           make -k -C "$KLIB_BUILD" M="$OOT_ROOT/drivers/gpu/drm/i915" \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
-            KCPPFLAGS="-I$OOT_ROOT/compat/backport-include -I$OOT_ROOT/include -I$OOT_ROOT/include/uapi -I$OOT_ROOT/drivers/gpu/drm/i915 -I$OOT_ROOT/compat -include $OOT_ROOT/compat/drm_compat.h -include $OOT_ROOT/compat/kcl_compat.h" \
+            KCPPFLAGS="$OOT_KCPPFLAGS" \
             KCFLAGS="-Wno-error" \
             modules 2>&1 | tee /tmp/build.log || true
 
