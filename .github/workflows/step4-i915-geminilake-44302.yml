@@ -65,21 +65,26 @@ jobs:
           echo "=== host KLIB DRM/I915 .config ==="
           grep -E '^CONFIG_DRM(_I915)?[ =]' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
 
-          # Step4 는 i915 단독 검증이다. repo root(M=$PWD) 로 전체 DRM 트리를
-          # 내려가면 현재 vendor subset 에 없는 omapdrm/panel/tiny/...까지 탐색해
-          # "No rule to make target" 으로 실패하므로 i915 디렉터리만 대상으로 한다.
-          # 헤더 우선순위는 최상위 Makefile 과 동일하게 backport-include → vendor
-          # include/uapi → i915 루트 → compat 순서를 명시적으로 유지한다.
-          # -k 는 i915 서브트리 내부의 남은 API gap 도 한 번에 인벤토리하기 위해 유지한다.
+          # ★Step4 = i915 단독이지만 빌드 대상은 repo root(M=$OOT_ROOT) 다.
+          # i915 서브트리만(M=.../i915) 빌드하면 5.4 DRM core(drivers/gpu/drm/*.c)가
+          # 빠져 i915 가 host 4.4.302 의 구형 drm 헤더(drm_gem_object.resv 부재 등)를
+          # 보게 되어 수천 건의 구조체 멤버/타입 에러가 난다(설계 위배).
+          # 최상위 Makefile 이 LINUXINCLUDE 에 vendor 5.4 include/ 를 prepend 하고
+          # `obj-y += drivers/gpu/drm/` 로 drm core + i915 를 CONFIG 게이팅으로 함께
+          # 빌드한다 → 5.4 drm 헤더가 우선 적용되어 cascade 가 근본 해소된다.
+          # drivers/gpu/drm/Makefile 은 vendor subset(core+ttm/scheduler/amd/i915)만
+          # 남기도록 정리되어 omapdrm/panel/tiny 등 "No rule to make target" 이 없다.
+          # KCPPFLAGS 는 compat force-include(-include) 전파용. -I 는 최상위 Makefile
+          # LINUXINCLUDE 가 권위이며 여기 -I 는 보조(중복 무해).
+          # -k 는 남은 API gap 을 한 번에 인벤토리하기 위해 유지한다.
           export OOT_KCPPFLAGS="\
             -I$OOT_ROOT/compat/backport-include \
             -I$OOT_ROOT/include \
             -I$OOT_ROOT/include/uapi \
-            -I$OOT_ROOT/drivers/gpu/drm/i915 \
             -I$OOT_ROOT/compat \
             -include $OOT_ROOT/compat/drm_compat.h \
             -include $OOT_ROOT/compat/kcl_compat.h"
-          make -k -C "$KLIB_BUILD" M="$OOT_ROOT/drivers/gpu/drm/i915" \
+          make -k -C "$KLIB_BUILD" M="$OOT_ROOT" \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
             KCPPFLAGS="$OOT_KCPPFLAGS" \
             KCFLAGS="-Wno-error" \
