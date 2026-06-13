@@ -11,5 +11,5 @@ struct pin_cookie { };
 #ifdef lockdep_unpin_lock
 #undef lockdep_unpin_lock
 #endif
-#define lockdep_unpin_lock(l, c) do { (void)(l); (void)(c); } while (0)
+#define lockdep_unpin_lock(l, c) ((void)(l), (void)(c))
 #endif
