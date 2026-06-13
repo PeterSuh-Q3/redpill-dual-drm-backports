@@ -82,6 +82,13 @@ jobs:
             KCPPFLAGS="$OOT_KCPPFLAGS" \
             modules 2>&1 | tee /tmp/build.log || true
 
+          # 디버그 심볼 제거 (실기 로더 적재용)
+          find "$OOT_ROOT/drivers/gpu/drm" -name "*.ko" | while read ko; do
+            ${CROSS_COMPILE}strip --strip-debug "$ko"
+          done
+          echo "=== strip 후 .ko 크기 ==="
+          find "$OOT_ROOT/drivers/gpu/drm" -name "*.ko" | sort | xargs ls -lh | awk '{print $5, $9}'
+
           echo ""
           echo "################ 빌드 결과 요약 ################"
           echo "=== [1] 에러 총수 ==="
