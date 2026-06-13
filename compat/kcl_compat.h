@@ -486,4 +486,10 @@ static inline int  mshell_pci_resize_resource(struct pci_dev *dev, int resno, in
 #define untagged_addr(addr) (addr)
 #endif
 
+/* --- acpi: ACPI_VIDEO_NOTIFY_PROBE added ~4.16 --- */
+#include <acpi/video.h>
+#ifndef ACPI_VIDEO_NOTIFY_PROBE
+#define ACPI_VIDEO_NOTIFY_PROBE 0x81
+#endif
+
 #endif /* _MSHELL_KCL_COMPAT_H */
