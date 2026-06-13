@@ -1,0 +1,115 @@
+name: "[STEP5] amdgpu 단독 빌드 (geminilake 4.4.302)"
+
+# 설계서 §10 Step5. integration/dual-drm(vendor v5.4 + 레시피) 의 amdgpu 를
+# Synology geminilake 4.4.302 KLIB 대상으로 OOT 빌드.
+# Step4(i915) 와 동일한 repo/KLIB/toolchain 사용.
+# amdgpu 단독: CONFIG_DRM/KMS_HELPER/TTM/SCHED/AMDGPU=m, i915 off.
+# Step4 클린 빌드 완료(에러 0) 기준으로 Step5 진행.
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { version: "7.3", platform: geminilake }
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (integration/dual-drm)
+        uses: actions/checkout@v4
+        with:
+          ref: integration/dual-drm
+          fetch-depth: 1
+
+      - name: Cache toolkit tarballs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ds.${{ matrix.platform }}-${{ matrix.version }}.env.txz
+            ds.${{ matrix.platform }}-${{ matrix.version }}.dev.txz
+          key: toolkit-${{ matrix.platform }}-${{ matrix.version }}
+
+      - name: Download toolchain
+        run: |
+          env_tarball=ds.${{ matrix.platform }}-${{ matrix.version }}.env.txz
+          if [ -f "$env_tarball" ]; then echo "[cache] $env_tarball"; else
+            echo "[download] $env_tarball"
+            wget -q https://global.synologydownload.com/download/ToolChain/toolkit/${{ matrix.version }}/${{ matrix.platform }}/$env_tarball
+          fi
+          mkdir toolchain
+          tar xf $env_tarball -C toolchain
+
+      - name: Download kernel source
+        run: |
+          dev_tarball=ds.${{ matrix.platform }}-${{ matrix.version }}.dev.txz
+          if [ -f "$dev_tarball" ]; then echo "[cache] $dev_tarball"; else
+            echo "[download] $dev_tarball"
+            wget -q https://global.synologydownload.com/download/ToolChain/toolkit/${{ matrix.version }}/${{ matrix.platform }}/$dev_tarball
+          fi
+          mkdir ksrc
+          tar xf $dev_tarball -C ksrc
+
+      - name: "Build (amdgpu 인벤토리: keep-going, -Wno-error)"
+        run: |
+          export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
+          export CROSS_COMPILE=$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-
+          export KBUILD_MODPOST_WARN=1
+          export OOT_ROOT=$PWD
+
+          echo "=== host KLIB DRM/AMDGPU .config ==="
+          grep -E '^CONFIG_(DRM|AMDGPU|TTM|DRM_SCHED)' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
+
+          export OOT_KCPPFLAGS="\
+            -I$OOT_ROOT/compat/backport-include \
+            -I$OOT_ROOT/include \
+            -I$OOT_ROOT/include/uapi \
+            -I$OOT_ROOT/compat \
+            -include $OOT_ROOT/compat/drm_compat.h \
+            -include $OOT_ROOT/compat/kcl_compat.h"
+
+          make -k -C "$KLIB_BUILD" M="$OOT_ROOT" \
+            CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m \
+            CONFIG_DRM_TTM=m CONFIG_DRM_SCHED=m \
+            CONFIG_DRM_AMDGPU=m \
+            KCPPFLAGS="$OOT_KCPPFLAGS" \
+            KCFLAGS="-Wno-error" \
+            modules 2>&1 | tee /tmp/build.log || true
+
+          echo ""
+          echo "################ 전수 에러 인벤토리 ################"
+          echo "=== [1] 에러 총수 ==="
+          grep -cE ': error:' /tmp/build.log || echo 0
+          echo "=== [2] 에러난 소스 파일별 건수 ==="
+          grep -oE '[a-zA-Z0-9_/.-]+\.[ch]:[0-9]+: error' /tmp/build.log | sed -E 's/:[0-9]+: error//' | sort | uniq -c | sort -rn | head -40
+          echo "=== [3] 에러 메시지 유형별(식별자 마스킹) ==="
+          grep -oE 'error: .*' /tmp/build.log | sed -E "s/'[^']*'/'X'/g; s/[0-9]+/N/g" | sort | uniq -c | sort -rn | head -30
+          echo "=== [4] undeclared/no member/implicit 식별자 고유 목록 ==="
+          grep -oE "'[A-Za-z_][A-Za-z0-9_]*' (undeclared|undeclared here|has no member named|implicit declaration)" /tmp/build.log \
+            | sort -u | head -120
+          echo "=== [5] 'has no member named X' (구조체 멤버 gap) ==="
+          grep -oE "has no member named '[A-Za-z0-9_]*'" /tmp/build.log | sort | uniq -c | sort -rn | head -40
+          echo "=== [6] 산출 .ko ==="
+          find "$OOT_ROOT/drivers/gpu/drm/amd" -name "*.ko" 2>/dev/null | sort
+          echo "###################################################"
+
+      - name: "[VERIFY] host 중복 export 점검"
+        if: always()
+        run: |
+          export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
+          SYMV="$KLIB_BUILD/Module.symvers"
+          [ -f "$SYMV" ] || { echo "[WARN] host Module.symvers 없음"; exit 0; }
+          awk '{print $2}' "$SYMV" | sort -u > /tmp/host_syms.txt
+          echo "host export 총 $(wc -l < /tmp/host_syms.txt)개 / drm_ $(grep -c '^drm_' /tmp/host_syms.txt)"
+          for ko in $(find "$PWD/drivers/gpu/drm/amd" -name "*.ko" 2>/dev/null); do
+            nm "$ko" 2>/dev/null | grep -oE '__ksymtab_[A-Za-z0-9_]+' | sed 's/__ksymtab_//' | sort -u > /tmp/ko_exp.txt
+            dup=$(comm -12 /tmp/ko_exp.txt /tmp/host_syms.txt)
+            [ -n "$dup" ] && { c=$(echo "$dup"|grep -c .); echo "  [DUP] $(basename $ko): $c 중복"; }
+          done
+          echo "=== MODPOST WARNING ==="
+          grep "WARNING:.*undefined" /tmp/build.log || echo "(없음)"
