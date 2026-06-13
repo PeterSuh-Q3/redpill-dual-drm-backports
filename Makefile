@@ -20,7 +20,7 @@ PWD  := $(shell pwd)
 # → LINUXINCLUDE 앞에 vendor include/ 와 compat/ 를 prepend 해 <drm/*.h> 가 5.4 로 해석되게 한다.
 #   (linux/·asm/ 등 그 외 헤더는 그대로 4.4.302 커널 것을 사용 = 의도된 동작)
 # backport-include(커널헤더 shim) 최우선 → vendor include(5.4 drm) → compat
-LINUXINCLUDE := -I$(src)/compat/backport-include -I$(src)/include -I$(src)/compat $(LINUXINCLUDE)
+LINUXINCLUDE := -I$(src)/compat/backport-include -I$(src)/include -I$(src)/include/uapi -I$(src)/compat $(LINUXINCLUDE)
 
 # ── DRM 스택 (upstream 네이티브 descent) ──
 # drivers/gpu/drm/Makefile 이 CONFIG 로 drm.o / drm_kms_helper.o / ttm/ /
