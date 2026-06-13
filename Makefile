@@ -1,36 +1,27 @@
 # SPDX-License-Identifier: GPL-2.0
-# Redpill Dual DRM OOT 최상위 Makefile (integration — upstream drm 레이아웃)
+# Redpill Dual DRM OOT 최상위 Makefile (★Rev: upstream 레이아웃 + header-only compat)
 #
 # 빌드 순서(§4.1/§10 Step6): drm(core) -> TTM -> scheduler(gpu-sched) -> i915 -> amdgpu
 #   → 모두 upstream drivers/gpu/drm/Makefile 이 CONFIG 게이팅으로 처리.
 #   drm 단일 버전은 vendor/drm-5.4 단일 스냅샷으로 보장(별도 drm_core/ rename 안 함).
+#   ※ 실제 소스(drivers/gpu/drm/*)는 integration/dual-drm 브랜치(vendor 병합본)에 존재.
+#      main 은 레시피(compat/, patches/, Makefile, Kconfig)만 보유.
 #
-# 사용:
-#   make -C /path/to/4.4.302/kernel M=$(PWD) modules \
-#        $(cat config.oot)        # CONFIG_* 주입 (§8) — BUILD-NOTES.md 참조
-#   또는: make all KDIR=/path/to/4.4.302/build
-#
-# KDIR 미지정 시 현재 실행 커널 헤더 사용.
+# 사용(integration 워킹트리에서):
+#   make all KDIR=/path/to/4.4.302/build
+#   CONFIG 주입 필수(4.4.302 .config 에 우리 OOT 옵션 없음) — BUILD-NOTES 참조.
 
 KDIR ?= /lib/modules/$(shell uname -r)/build
 PWD  := $(shell pwd)
 
-# ── compat shim 레이어 (본 프로젝트 신설) ──
-obj-$(CONFIG_DRM_BACKPORT_COMPAT) += compat/
-
 # ── DRM 스택 (upstream 네이티브 descent) ──
-# drivers/gpu/drm/Makefile 이 아래를 CONFIG 로 게이팅:
-#   obj-$(CONFIG_DRM) += drm.o            (drm.ko)
-#   obj-$(CONFIG_DRM_KMS_HELPER) += drm_kms_helper.o
-#   obj-$(CONFIG_DRM_TTM)   += ttm/       (ttm.ko, 단일 인스턴스)
-#   obj-$(CONFIG_DRM_SCHED) += scheduler/ (gpu-sched.ko — amdgpu 의존, §설계 Makefile 누락분 보완)
-#   obj-$(CONFIG_DRM_I915)  += i915/
-#   obj-$(CONFIG_DRM_AMDGPU)+= amd/amdgpu/
+# drivers/gpu/drm/Makefile 이 CONFIG 로 drm.o / drm_kms_helper.o / ttm/ /
+# scheduler/(gpu-sched, §설계 Makefile 누락분 보완) / i915/ / amd/amdgpu/ 게이팅.
 obj-y += drivers/gpu/drm/
 
-# compat 헤더 전파:
-#   OOT M= 빌드에서 최상위 ccflags-y 는 하위 디렉토리(drivers/gpu/drm/*)로 전파되지 않음.
-#   → 전 컴파일에 적용되는 KCPPFLAGS 로 주입(아래 all: 타깃). BUILD-NOTES.md §전파 참조.
+# ── compat shim (header-only) ──
+# .c 빌드 없음. drm_compat.h 를 전 컴파일에 force-include (OOT 하위 디렉토리 전파용).
+# (최상위 ccflags-y 는 drivers/gpu/drm/* 로 전파되지 않으므로 KCPPFLAGS 사용)
 COMPAT_CPPFLAGS := -I$(PWD)/compat -I$(PWD)/include -include $(PWD)/compat/drm_compat.h
 
 all:
