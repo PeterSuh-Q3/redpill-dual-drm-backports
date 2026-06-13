@@ -1,10 +1,33 @@
 # vendor/drm-5.4 — pinned 5.4 LTS drm 스냅샷 (원자재 브랜치)
 
-이 브랜치는 Linux **v5.4.x** 에서 추출한 drm_core + i915 + amd/{amdgpu,display} 단일
-스냅샷만 담는다. (main 의 레시피와 분리된 lineage)
+Linux **v5.4** (tag) 에서 추출한 drm 서브트리. main 의 레시피(compat/patches)와 분리된 lineage.
+integration/dual-drm 이 이 스냅샷 위에 patches/ 를 적용해 Dual 빌드한다.
 
-- 생성/갱신: main 의 `scripts/01_extract_drm_core.sh` 산출물을 여기에 커밋
-- **단일 커밋 = drm_core 단일버전 원칙(§4.1) 구조적 보장**
-- 핀 커밋 해시는 커밋 메시지에 기록 (재현성)
+## 핀 (재현성)
 
-> 아직 비어 있음 — 다음 단계에서 v5.4.x 추출본을 채운다.
+| 항목 | 값 |
+|---|---|
+| upstream | torvalds/linux |
+| tag | **v5.4** |
+| commit | `219d54332a09e8d8741c1e1982f5eae56099de85` |
+| 추출일 | 2026-06-13 |
+
+> **단일 커밋 = drm_core 단일버전 원칙(§4.1) 구조적 보장** — i915·amd 가 동일 v5.4 에서 추출됨.
+
+## 포함 경로 (faithful upstream 레이아웃)
+
+```
+include/drm/            include/uapi/drm/
+drivers/dma-buf/        (dma-fence.c, dma-resv 등 — i915/amdgpu/ttm 의존)
+drivers/gpu/drm/        코어 *.c/*.h (88개)
+drivers/gpu/drm/ttm/    drivers/gpu/drm/scheduler/
+drivers/gpu/drm/i915/   drivers/gpu/drm/amd/  (amdgpu + display DC)
+```
+
+설계서 §7 의 `drm_core/` 재배치(rename)는 integration 단계에서 Makefile/patch 로 수행.
+nouveau/radeon 등 타 드라이버는 sparse-checkout 으로 제외(불필요).
+
+## 갱신 (5.4.x bump)
+
+main 의 `scripts/01_extract_drm_core.sh` 를 새 v5.4.y 로 돌려 이 브랜치를 교체 커밋하고
+위 표의 commit/tag/추출일을 갱신한다.
