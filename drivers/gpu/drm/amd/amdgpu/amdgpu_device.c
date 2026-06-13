@@ -2843,7 +2843,7 @@ fence_driver_init:
 	/* Get a log2 for easy divisions. */
 	adev->mm_stats.log2_max_MBps = ilog2(max(1u, max_MBps));
 
-	amdgpu_fbdev_init(adev);
+	/* amdgpu_fbdev_init: DSM 헤드리스 — fbdev 에뮬레이션 불필요 */
 
 	if (amdgpu_sriov_vf(adev) && amdgim_is_hwperf(adev))
 		amdgpu_pm_virt_sysfs_init(adev);
