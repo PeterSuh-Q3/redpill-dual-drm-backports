@@ -1,39 +1,31 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  * compat/drm_compat.h
- * 4.4.302 <-> 5.4 LTS DRM core API 호환 레이어 (공통)
- * 설계서 §6.1 기준. i915 + amdgpu 공용.
+ * 4.4.302(Synology geminilake) <-> 5.4 LTS DRM core 호환 레이어 (공통).
+ * i915 + amdgpu 공용.
  *
- * shim 방향: 5.4 소스가 호출하는 심볼 -> 4.4 커널 심볼로 연결.
+ * ★ Rev: 1차 심볼-갭 분석(docs/SYMBOL-GAP-Rev1.md) 반영.
+ *   Synology geminilake 4.4.302 는 i915 를 CannonLake(GEN10)까지 백포트하며
+ *   dma_fence / drm_gem_object_put(_unlocked) / drm_atomic / i2c_lock_bus 를
+ *   이미 네이티브로 제공한다. 따라서 설계서 §6 원안의 해당 매핑은 **제거**한다
+ *   (매크로/inline 재정의 시 충돌). 4.4.302 에 부재해 shim 이 필요한 공통 항목은
+ *   dma_resv(타입/accessor) 뿐이다.
+ *
+ * shim 방향: 5.4 소스가 호출하는 심볼 -> 4.4.302 커널 심볼로 연결.
  */
 #ifndef _REDPILL_DRM_COMPAT_H
 #define _REDPILL_DRM_COMPAT_H
 
 #include <linux/version.h>
-#include <linux/fence.h>
-#include <linux/reservation.h>
+#include <linux/dma-fence.h>      /* 4.4.302 제공: dma_fence_* 네이티브 (매핑 불필요) */
+#include <linux/reservation.h>    /* 4.4.302 제공: reservation_object (dma_resv 는 부재) */
 #include <drm/drmP.h>
-#include <drm/drm_gem.h>
+#include <drm/drm_gem.h>          /* 4.4.302 제공: drm_gem_object_put(_unlocked) */
 
-/* ── dma_fence: 4.4 fence API 매핑 ──
- * 5.4 소스: dma_fence_* 호출
- * 4.4 커널: fence_* 존재
- */
-#define dma_fence_ops           fence_ops
-#define dma_fence_init          fence_init
-#define dma_fence_signal        fence_signal
-#define dma_fence_get           fence_get
-#define dma_fence_put           fence_put
-#define dma_fence_is_signaled   fence_is_signaled
-
-/* ── drm_atomic: 4.4 미구현 -> stub (drm_compat.c 에서 구현) ── */
-struct drm_atomic_state *drm_atomic_state_alloc(struct drm_device *dev);
-void drm_atomic_state_free(struct drm_atomic_state *state);
-
-/* ── reservation_object <-> dma_resv 매핑 ──
- * 5.4 소스: dma_resv_* 사용 (전환기, reservation_object 병존)
- * 4.4 커널: reservation_object 전용
- * 상세 accessor 매핑은 reservation_compat.h 참조.
+/* ── dma_resv <- reservation_object 매핑 (유일한 필수 공통 shim) ──
+ * 5.4 소스: dma_resv / dma_resv_* (313회) 사용.
+ * 4.4.302: reservation_object 만 제공, dma_resv 타입/함수 부재.
+ * 상세 accessor 는 reservation_compat.h 에서 보강.
  */
 #define dma_resv                reservation_object
 #define dma_resv_lock           reservation_object_lock
@@ -42,17 +34,14 @@ void drm_atomic_state_free(struct drm_atomic_state *state);
 #define dma_resv_fini           reservation_object_fini
 #define dma_resv_trylock        reservation_object_trylock
 
-/* ── GEM object ref/put 통합 shim ──
- * 5.4: drm_gem_object_put() 및 drm_gem_object_put_unlocked() 혼용
- * 4.4: drm_gem_object_unreference_unlocked() 단독
+/* dma_resv accessor/유틸 상세 매핑 (force-include 시 함께 제공) */
+#include "reservation_compat.h"
+
+/*
+ * 제거됨(4.4.302 네이티브 제공 — 재정의 충돌 방지). 근거: docs/SYMBOL-GAP-Rev1.md
+ *   - dma_fence_ops/init/signal/get/put/is_signaled   (linux/dma-fence.h)
+ *   - drm_atomic_state_alloc / drm_atomic_state_free   (drm/drm_atomic.h 존재)
+ *   - drm_gem_object_put / drm_gem_object_put_unlocked (drm/drm_gem.h)
  */
-static inline void drm_gem_object_put(struct drm_gem_object *obj)
-{
-	drm_gem_object_unreference_unlocked(obj);
-}
-static inline void drm_gem_object_put_unlocked(struct drm_gem_object *obj)
-{
-	drm_gem_object_unreference_unlocked(obj);
-}
 
 #endif /* _REDPILL_DRM_COMPAT_H */
