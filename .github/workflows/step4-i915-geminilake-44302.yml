@@ -60,7 +60,8 @@ jobs:
           export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
           export CROSS_COMPILE=$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-
           export KBUILD_MODPOST_WARN=1
-          COMPAT="-I$PWD/compat -I$PWD/include -include $PWD/compat/drm_compat.h"
+          # 헤더 경로는 Makefile 의 LINUXINCLUDE(backport-include→vendor include→compat)가 처리.
+          # force-include(drm_compat.h) 제거 — drmP.h cascade 유발했었음.
 
           echo "=== host KLIB DRM/I915 .config ==="
           grep -E '^CONFIG_DRM(_I915)?[ =]' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
@@ -69,7 +70,7 @@ jobs:
           #   KCFLAGS=-Wno-error 로 -Werror 조기중단 방지 → 전체 gap 을 1회에 수집.
           make -k -C "$KLIB_BUILD" M=$PWD \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
-            KCPPFLAGS="$COMPAT" KCFLAGS="-Wno-error" \
+            KCFLAGS="-Wno-error" \
             modules 2>&1 | tee /tmp/build.log || true
 
           echo ""
