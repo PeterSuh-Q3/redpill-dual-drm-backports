@@ -1,0 +1,111 @@
+name: "[STEP6] Dual DRM 통합 빌드 (geminilake 4.4.302)"
+
+# 설계서 §10 Step6. Step4(i915 정식) + Step5(amdgpu 정식) 을 단일 빌드로 통합.
+# CONFIG_DRM_I915=m + CONFIG_DRM_AMDGPU=m 동시 활성화.
+# 목표: drm.ko / drm_kms_helper.ko / i915.ko / amdgpu.ko / ttm.ko / gpu-sched.ko 산출.
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { version: "7.3", platform: geminilake }
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (integration/dual-drm)
+        uses: actions/checkout@v4
+        with:
+          ref: integration/dual-drm
+          fetch-depth: 1
+
+      - name: Cache toolkit tarballs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ds.${{ matrix.platform }}-${{ matrix.version }}.env.txz
+            ds.${{ matrix.platform }}-${{ matrix.version }}.dev.txz
+          key: toolkit-${{ matrix.platform }}-${{ matrix.version }}
+
+      - name: Download toolchain
+        run: |
+          env_tarball=ds.${{ matrix.platform }}-${{ matrix.version }}.env.txz
+          if [ -f "$env_tarball" ]; then echo "[cache] $env_tarball"; else
+            echo "[download] $env_tarball"
+            wget -q https://global.synologydownload.com/download/ToolChain/toolkit/${{ matrix.version }}/${{ matrix.platform }}/$env_tarball
+          fi
+          mkdir toolchain
+          tar xf $env_tarball -C toolchain
+
+      - name: Download kernel source
+        run: |
+          dev_tarball=ds.${{ matrix.platform }}-${{ matrix.version }}.dev.txz
+          if [ -f "$dev_tarball" ]; then echo "[cache] $dev_tarball"; else
+            echo "[download] $dev_tarball"
+            wget -q https://global.synologydownload.com/download/ToolChain/toolkit/${{ matrix.version }}/${{ matrix.platform }}/$dev_tarball
+          fi
+          mkdir ksrc
+          tar xf $dev_tarball -C ksrc
+
+      - name: "Build (Dual DRM 정식 빌드: i915 + amdgpu)"
+        run: |
+          export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
+          export CROSS_COMPILE=$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-
+          export KBUILD_MODPOST_WARN=1
+          export OOT_ROOT=$PWD
+
+          echo "=== host KLIB DRM .config ==="
+          grep -E '^CONFIG_(DRM|I915|AMDGPU|TTM|DRM_SCHED)' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
+
+          export OOT_KCPPFLAGS="\
+            -I$OOT_ROOT/compat/backport-include \
+            -I$OOT_ROOT/include \
+            -I$OOT_ROOT/include/uapi \
+            -I$OOT_ROOT/compat \
+            -include $OOT_ROOT/compat/drm_compat.h \
+            -include $OOT_ROOT/compat/kcl_compat.h"
+
+          make -C "$KLIB_BUILD" M="$OOT_ROOT" \
+            CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m \
+            CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
+            CONFIG_DRM_TTM=m CONFIG_DRM_SCHED=m \
+            CONFIG_DRM_AMDGPU=m \
+            KCPPFLAGS="$OOT_KCPPFLAGS" \
+            modules 2>&1 | tee /tmp/build.log || true
+
+          echo ""
+          echo "################ 빌드 결과 요약 ################"
+          echo "=== [1] 에러 총수 ==="
+          grep -cE ': error:' /tmp/build.log || echo 0
+          echo "=== [2] 에러난 소스 파일별 건수 ==="
+          grep -oE '[a-zA-Z0-9_/.-]+\.[ch]:[0-9]+: error' /tmp/build.log | sed -E 's/:[0-9]+: error//' | sort | uniq -c | sort -rn | head -40
+          echo "=== [3] 에러 메시지 유형별(식별자 마스킹) ==="
+          grep -oE 'error: .*' /tmp/build.log | sed -E "s/'[^']*'/'X'/g; s/[0-9]+/N/g" | sort | uniq -c | sort -rn | head -30
+          echo "=== [4] 산출 .ko (전체) ==="
+          find "$OOT_ROOT/drivers/gpu/drm" -name "*.ko" 2>/dev/null | sort
+          echo "=== [5] MODPOST WARNING ==="
+          grep "WARNING:.*undefined" /tmp/build.log || echo "(없음)"
+          echo "#################################################"
+
+      - name: "[VERIFY] host 중복 export 점검"
+        if: always()
+        run: |
+          export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
+          SYMV="$KLIB_BUILD/Module.symvers"
+          [ -f "$SYMV" ] || { echo "[WARN] host Module.symvers 없음"; exit 0; }
+          awk '{print $2}' "$SYMV" | sort -u > /tmp/host_syms.txt
+          echo "host export 총 $(wc -l < /tmp/host_syms.txt)개"
+          total=0
+          for ko in $(find "$PWD/drivers/gpu/drm" -name "*.ko" 2>/dev/null); do
+            nm "$ko" 2>/dev/null | grep -oE '__ksymtab_[A-Za-z0-9_]+' | sed 's/__ksymtab_//' | sort -u > /tmp/ko_exp.txt
+            dup=$(comm -12 /tmp/ko_exp.txt /tmp/host_syms.txt)
+            [ -n "$dup" ] && { c=$(echo "$dup"|grep -c .); echo "  [DUP] $(basename $ko): $c 중복"; total=$((total+c)); }
+          done
+          echo "=== 중복 export 총계: ${total} ==="
+          grep "WARNING:.*undefined" /tmp/build.log || echo "(MODPOST WARNING 없음)"
