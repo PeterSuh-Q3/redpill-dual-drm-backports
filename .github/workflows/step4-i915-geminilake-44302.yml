@@ -55,7 +55,7 @@ jobs:
           mkdir ksrc
           tar xf $dev_tarball -C ksrc
 
-      - name: "Build (i915 인벤토리: keep-going, -Wno-error)"
+      - name: "Build (i915 정식 빌드)"
         run: |
           export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
           export CROSS_COMPILE=$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-
@@ -84,10 +84,9 @@ jobs:
             -I$OOT_ROOT/compat \
             -include $OOT_ROOT/compat/drm_compat.h \
             -include $OOT_ROOT/compat/kcl_compat.h"
-          make -k -C "$KLIB_BUILD" M="$OOT_ROOT" \
+          make -C "$KLIB_BUILD" M="$OOT_ROOT" \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
             KCPPFLAGS="$OOT_KCPPFLAGS" \
-            KCFLAGS="-Wno-error" \
             modules 2>&1 | tee /tmp/build.log || true
 
           echo ""
