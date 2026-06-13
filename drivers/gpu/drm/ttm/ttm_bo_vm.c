@@ -69,7 +69,7 @@ static vm_fault_t ttm_bo_vm_fault_idle(struct ttm_buffer_object *bo,
 			goto out_unlock;
 
 		ttm_bo_get(bo);
-		up_read(&vmf->vma->vm_mm->mmap_sem);
+		up_read(&current->mm->mmap_sem);
 		(void) dma_fence_wait(bo->moving, true);
 		dma_resv_unlock(bo->base.resv);
 		ttm_bo_put(bo);
@@ -106,9 +106,8 @@ static unsigned long ttm_bo_io_mem_pfn(struct ttm_buffer_object *bo,
 		+ page_offset;
 }
 
-static vm_fault_t ttm_bo_vm_fault(struct vm_fault *vmf)
+static vm_fault_t ttm_bo_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
-	struct vm_area_struct *vma = vmf->vma;
 	struct ttm_buffer_object *bo = (struct ttm_buffer_object *)
 	    vma->vm_private_data;
 	struct ttm_bo_device *bdev = bo->bdev;
@@ -120,7 +119,7 @@ static vm_fault_t ttm_bo_vm_fault(struct vm_fault *vmf)
 	int err;
 	int i;
 	vm_fault_t ret = VM_FAULT_NOPAGE;
-	unsigned long address = vmf->address;
+	unsigned long address = vmf->virtual_address;
 	struct ttm_mem_type_manager *man =
 		&bdev->man[bo->mem.mem_type];
 	struct vm_area_struct cvma;
@@ -135,7 +134,7 @@ static vm_fault_t ttm_bo_vm_fault(struct vm_fault *vmf)
 		if (vmf->flags & FAULT_FLAG_ALLOW_RETRY) {
 			if (!(vmf->flags & FAULT_FLAG_RETRY_NOWAIT)) {
 				ttm_bo_get(bo);
-				up_read(&vmf->vma->vm_mm->mmap_sem);
+				up_read(&current->mm->mmap_sem);
 				(void) ttm_bo_wait_unreserved(bo);
 				ttm_bo_put(bo);
 			}
