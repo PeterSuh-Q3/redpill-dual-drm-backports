@@ -93,6 +93,20 @@ jobs:
           grep "WARNING:.*undefined" /tmp/build.log || echo "(없음)"
           echo "#################################################"
 
+      - name: "Push .ko to gitout branch"
+        run: |
+          BR="module-output/geminilake-${{ matrix.version }}-4.4.302"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan pub_tmp
+          git rm -rf . >/dev/null 2>&1 || true
+          mkdir -p modules
+          find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} modules/ \;
+          git add modules
+          git commit -m "build output geminilake-${{ matrix.version }}-4.4.302 dual-drm (i915+amdgpu) [skip ci]"
+          git push -f origin "pub_tmp:${BR}"
+          echo "[PUSHED] origin ${BR} ($(ls modules/*.ko | wc -l) ko)"
+
       - name: "[VERIFY] host 중복 export 점검"
         if: always()
         run: |
