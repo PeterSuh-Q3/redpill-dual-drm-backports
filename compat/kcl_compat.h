@@ -230,32 +230,13 @@ radix_tree_iter_delete(struct radix_tree_root *root,
 }
 #endif
 
-/* --- workqueue: rcu_work / flush_rcu_work / queue_rcu_work (4.20+) --- */
+/* --- workqueue: rcu_work 관련 (4.4.302 workqueue.h 에 이미 존재) --- */
+/* struct rcu_work / init_rcu_work / queue_rcu_work 는 4.4.302에 이미 정의되어 있으므로
+ * 여기서 재정의하면 redefinition/conflicting types 에러 발생 → 포함하지 않음 */
 #include <linux/workqueue.h>
 #include <linux/rcupdate.h>
-#ifndef _BPI_RCU_WORK
-#define _BPI_RCU_WORK
-struct rcu_work {
-	struct work_struct work;
-	struct rcu_head    rcu;
-	struct workqueue_struct *wq;
-};
-static inline void init_rcu_work(struct rcu_work *rwork,
-				 work_func_t func)
-{
-	INIT_WORK(&rwork->work, func);
-}
-#endif
 #ifndef flush_rcu_work
 #define flush_rcu_work(w) flush_work(&(w)->work)
-#endif
-#ifndef queue_rcu_work
-static inline bool queue_rcu_work(struct workqueue_struct *wq,
-				  struct rcu_work *rwork)
-{
-	/* 4.4.302: RCU 유예 없이 즉시 큐잉 (RCU grace period 미보장, 실용상 무해) */
-	return queue_work(wq, &rwork->work);
-}
 #endif
 
 /* --- dma: dma_map_page_attrs (4.6+) --- */

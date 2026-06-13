@@ -10,6 +10,14 @@
 
 #include_next <linux/hdmi.h>
 
+/* 4.4.302 enum hdmi_infoframe_type 에 DRM(HDR) 타입 부재 → 함수 정의 전에 선언 */
+#ifndef _BPI_HDMI_TYPE_DRM
+#define _BPI_HDMI_TYPE_DRM
+#define HDMI_INFOFRAME_TYPE_DRM        0x87
+#define HDMI_PACKET_TYPE_GENERAL_CONTROL 0x03
+#define HDMI_PACKET_TYPE_GAMUT_METADATA  0x0a
+#endif
+
 #ifndef HDMI_EOTF_TRADITIONAL_GAMMA_SDR
 enum hdmi_eotf {
 	HDMI_EOTF_TRADITIONAL_GAMMA_SDR,
@@ -101,14 +109,6 @@ static inline int hdmi_spd_infoframe_check(struct hdmi_spd_infoframe *frame)
 { return 0; }
 static inline int hdmi_vendor_infoframe_check(struct hdmi_vendor_infoframe *frame)
 { return 0; }
-
-/* 4.4.302 enum hdmi_infoframe_type 에 DRM(HDR) 타입 부재 → 보강 */
-#ifndef _BPI_HDMI_TYPE_DRM
-#define _BPI_HDMI_TYPE_DRM
-#define HDMI_INFOFRAME_TYPE_DRM        0x87
-#define HDMI_PACKET_TYPE_GENERAL_CONTROL 0x03
-#define HDMI_PACKET_TYPE_GAMUT_METADATA  0x0a
-#endif
 
 #endif /* HDMI_EOTF_TRADITIONAL_GAMMA_SDR */
 
