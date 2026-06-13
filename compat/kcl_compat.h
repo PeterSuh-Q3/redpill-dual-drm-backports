@@ -493,13 +493,13 @@ static inline int  mshell_pci_resize_resource(struct pci_dev *dev, int resno, in
 #endif
 
 /* --- dma_fence tracepoints: DSM 4.4.302 커널이 __tracepoint_dma_fence_* 미export --- */
+#include <linux/dma-fence.h>
 #undef trace_dma_fence_signaled
-#define trace_dma_fence_signaled(f) do {} while (0)
+static inline void trace_dma_fence_signaled(struct dma_fence *f) {}
 
 /* --- perf_event_update_userpage: DSM 4.4.302 커널 미export → no-op stub --- */
 #include <linux/perf_event.h>
 #undef perf_event_update_userpage
-static inline void kcl_perf_event_update_userpage(struct perf_event *event) {}
-#define perf_event_update_userpage kcl_perf_event_update_userpage
+static inline void perf_event_update_userpage(struct perf_event *event) {}
 
 #endif /* _MSHELL_KCL_COMPAT_H */

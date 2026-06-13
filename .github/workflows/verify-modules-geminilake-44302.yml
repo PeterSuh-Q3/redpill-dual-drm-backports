@@ -1,7 +1,8 @@
 name: "[VERIFY] geminilake-7.3-4.4.302 모듈 의존성 검증"
 
-# module-output 브랜치의 19개 .ko 를 geminilake 7.3 KLIB Module.symvers 기준으로
-# 심볼 의존성 검증. 미충족 심볼(커널 미제공) 및 모듈 간 순환/누락 탐지.
+# module-output 브랜치의 .ko 를 두 가지 방법으로 검증:
+#   [A] depmod -e -F System.map  — 실기 modprobe 와 동일 기준 (커널 미export 심볼 탐지)
+#   [B] nm/Module.symvers 교차검증 — 보조
 
 on:
   workflow_dispatch:
@@ -40,68 +41,90 @@ jobs:
           KLIB=ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-7.3/build
           echo "KLIB=$KLIB" >> $GITHUB_ENV
           echo "SYMVERS=$KLIB/Module.symvers" >> $GITHUB_ENV
+          # System.map 위치 탐색
+          SYSMAP=$(find ksrc -name "System.map" 2>/dev/null | head -1)
+          echo "SYSMAP=${SYSMAP}" >> $GITHUB_ENV
+          echo "System.map: ${SYSMAP:-(없음)}"
 
-      - name: Verify module symbols
+      - name: "[A] depmod -e 기반 심볼 검증 (modprobe 실기 기준)"
         run: |
           KODIR="thirdparty/geminilake-7.3-4.4.302"
           echo "=== 검증 대상 .ko ==="
           ls $KODIR/*.ko | xargs -I{} basename {}
 
-          echo ""
-          echo "=== [1] modinfo: depends 관계 ==="
-          for ko in $KODIR/*.ko; do
-            dep=$(modinfo "$ko" 2>/dev/null | grep "^depends:" | sed 's/depends:\s*//')
-            printf "  %-40s depends: %s\n" "$(basename $ko)" "${dep:-(없음)}"
-          done
+          # depmod 가 인식할 가짜 모듈 루트 구성
+          # 커널 버전 문자열 추출 (Module.symvers 첫 번째 .ko 경로에서 추론)
+          KVER=$(awk 'NR==1{match($3,/[0-9]+\.[0-9]+\.[0-9]+[^/]*/,a); print a[0]}' "$SYMVERS" 2>/dev/null | head -1)
+          [ -z "$KVER" ] && KVER="4.4.302+"
+          echo "커널 버전: $KVER"
+
+          FAKE_ROOT=/tmp/fake_root
+          MOD_DIR="$FAKE_ROOT/lib/modules/$KVER"
+          mkdir -p "$MOD_DIR/extra"
+          cp $KODIR/*.ko "$MOD_DIR/extra/"
+
+          # System.map 사용 가능 여부에 따라 depmod 옵션 분기
+          if [ -n "$SYSMAP" ] && [ -f "$SYSMAP" ]; then
+            echo "[depmod] System.map 사용: $SYSMAP"
+            depmod -e -F "$SYSMAP" -b "$FAKE_ROOT" "$KVER" 2>&1
+          else
+            echo "[depmod] System.map 없음 — Module.symvers 에서 Symbol.map 생성"
+            # Module.symvers → System.map 형식 변환 (주소 0x0, T 타입)
+            awk '{print "0000000000000000 T " $2}' "$SYMVERS" > /tmp/fake_sysmap.txt
+            echo "[depmod] fake System.map 심볼 수: $(wc -l < /tmp/fake_sysmap.txt)"
+            depmod -e -F /tmp/fake_sysmap.txt -b "$FAKE_ROOT" "$KVER" 2>&1
+          fi
 
           echo ""
-          echo "=== [2] 모듈 내 exported symbols 집합 구축 ==="
+          echo "=== depmod 미충족 심볼 (needs unknown symbol) ==="
+          DEPMOD_MISSING=$(depmod -e -F /tmp/fake_sysmap.txt -b "$FAKE_ROOT" "$KVER" 2>&1 | grep "needs unknown symbol" || true)
+          if [ -n "$DEPMOD_MISSING" ]; then
+            echo "$DEPMOD_MISSING"
+            echo ""
+            echo "★ 미충족 심볼 발견 — 실기 modprobe 실패 예상"
+          else
+            echo "✓ 미충족 심볼 없음 — 실기 modprobe 통과 예상"
+          fi
+
+          echo ""
+          echo "=== modules.dep (로드 순서 참고) ==="
+          cat "$MOD_DIR/modules.dep" 2>/dev/null || echo "(없음)"
+
+      - name: "[B] nm/Module.symvers 교차검증 (보조)"
+        run: |
+          KODIR="thirdparty/geminilake-7.3-4.4.302"
+
+          echo "=== 모듈 내 exported symbols ==="
           for ko in $KODIR/*.ko; do
             nm "$ko" 2>/dev/null | grep -oE '__ksymtab_[A-Za-z0-9_]+' | sed 's/__ksymtab_//'
           done | sort -u > /tmp/ko_exports.txt
-          echo "  모듈 간 exported symbols: $(wc -l < /tmp/ko_exports.txt)개"
+          echo "  모듈 간 exported: $(wc -l < /tmp/ko_exports.txt)개"
 
-          echo ""
-          echo "=== [3] 커널 exported symbols (Module.symvers) ==="
           awk '{print $2}' "$SYMVERS" | sort -u > /tmp/kernel_exports.txt
-          echo "  커널 exported symbols: $(wc -l < /tmp/kernel_exports.txt)개"
+          echo "  커널 exported: $(wc -l < /tmp/kernel_exports.txt)개"
 
           echo ""
-          echo "=== [4] 모듈별 undefined symbol 검증 ==="
-          TOTAL_MISSING=0
+          echo "=== 모듈별 미충족 심볼 (Module.symvers 기준) ==="
+          TOTAL=0
           for ko in $KODIR/*.ko; do
-            nm "$ko" 2>/dev/null | awk '$2=="U"{print $3}' | sort -u > /tmp/undef_ko.txt
-            # 모듈 내 or 커널 중 어느 쪽에도 없는 심볼
-            comm -23 /tmp/undef_ko.txt /tmp/ko_exports.txt > /tmp/not_in_modules.txt
-            comm -23 /tmp/not_in_modules.txt /tmp/kernel_exports.txt > /tmp/missing.txt
+            nm "$ko" 2>/dev/null | awk '$2=="U"{print $3}' | sort -u > /tmp/undef.txt
+            comm -23 /tmp/undef.txt /tmp/ko_exports.txt > /tmp/not_in_mods.txt
+            comm -23 /tmp/not_in_mods.txt /tmp/kernel_exports.txt > /tmp/missing.txt
             cnt=$(wc -l < /tmp/missing.txt)
             if [ "$cnt" -gt 0 ]; then
-              echo "  [MISSING] $(basename $ko): $cnt 개 미충족 심볼"
+              echo "  [MISSING] $(basename $ko): $cnt 개"
               cat /tmp/missing.txt | sed 's/^/    /'
-              TOTAL_MISSING=$((TOTAL_MISSING + cnt))
+              TOTAL=$((TOTAL + cnt))
             else
               echo "  [OK]      $(basename $ko)"
             fi
           done
+          echo ""
+          echo "=== 총 미충족: ${TOTAL} (Module.symvers 기준) ==="
 
           echo ""
-          echo "=== [5] 총 미충족 심볼 수: ${TOTAL_MISSING} ==="
-          if [ "$TOTAL_MISSING" -eq 0 ]; then
-            echo "  ✓ 모든 심볼 충족 — 실기 적재 가능"
-          else
-            echo "  ✗ 미충족 심볼 존재 — 검토 필요"
-          fi
-
-          echo ""
-          echo "=== [6] 모듈 간 의존성 DAG (depends 역방향) ==="
-          for ko in $KODIR/*.ko; do
-            modinfo "$ko" 2>/dev/null | grep "^depends:" | grep -v "depends:$" | \
-              awk -v m="$(basename $ko .ko)" '{print m " ← " $2}'
-          done
-
-          echo ""
-          echo "=== [7] vermagic 확인 ==="
+          echo "=== vermagic ==="
           for ko in $KODIR/*.ko; do
             vm=$(modinfo "$ko" 2>/dev/null | grep "^vermagic:" | sed 's/vermagic:\s*//')
-            printf "  %-40s %s\n" "$(basename $ko)" "$vm"
+            printf "  %-40s %s\n" "$(basename $ko)" "${vm:-(없음)}"
           done
