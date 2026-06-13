@@ -123,9 +123,13 @@ static void clear_pages_work_release(struct dma_fence *fence)
 	dma_fence_free(&w->dma);
 }
 
+static bool clear_pages_enable_signaling(struct dma_fence *f) { return true; }
+
 static const struct dma_fence_ops clear_pages_work_ops = {
 	.get_driver_name = clear_pages_work_driver_name,
 	.get_timeline_name = clear_pages_work_timeline_name,
+	.enable_signaling = clear_pages_enable_signaling,
+	.wait = dma_fence_default_wait,	/* 4.4.302 BUG_ON(!ops->wait) */
 	.release = clear_pages_work_release,
 };
 

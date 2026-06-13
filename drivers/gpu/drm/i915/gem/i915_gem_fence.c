@@ -50,9 +50,13 @@ static void stub_release(struct dma_fence *fence)
 	dma_fence_free(&stub->dma);
 }
 
+static bool stub_enable_signaling(struct dma_fence *f) { return true; }
+
 static const struct dma_fence_ops stub_fence_ops = {
 	.get_driver_name = stub_driver_name,
 	.get_timeline_name = stub_timeline_name,
+	.enable_signaling = stub_enable_signaling,
+	.wait = dma_fence_default_wait,	/* 4.4.302 BUG_ON(!ops->wait) */
 	.release = stub_release,
 };
 

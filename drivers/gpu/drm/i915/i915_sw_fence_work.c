@@ -69,9 +69,13 @@ static void fence_release(struct dma_fence *fence)
 	dma_fence_free(&f->dma);
 }
 
+static bool fence_enable_signaling(struct dma_fence *f) { return true; }
+
 static const struct dma_fence_ops fence_ops = {
 	.get_driver_name = get_driver_name,
 	.get_timeline_name = get_timeline_name,
+	.enable_signaling = fence_enable_signaling,
+	.wait = dma_fence_default_wait,	/* 4.4.302 BUG_ON(!ops->wait) */
 	.release = fence_release,
 };
 

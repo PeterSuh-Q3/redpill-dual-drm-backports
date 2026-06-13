@@ -128,15 +128,24 @@ static void drm_sched_fence_release_finished(struct dma_fence *f)
 	dma_fence_put(&fence->scheduled);
 }
 
+static bool drm_sched_fence_enable_signaling(struct dma_fence *f)
+{
+	return true;	/* 4.4.302 BUG_ON(!ops->enable_signaling) 우회 */
+}
+
 const struct dma_fence_ops drm_sched_fence_ops_scheduled = {
 	.get_driver_name = drm_sched_fence_get_driver_name,
 	.get_timeline_name = drm_sched_fence_get_timeline_name,
+	.enable_signaling = drm_sched_fence_enable_signaling,
+	.wait = dma_fence_default_wait,	/* 4.4.302 BUG_ON(!ops->wait) */
 	.release = drm_sched_fence_release_scheduled,
 };
 
 const struct dma_fence_ops drm_sched_fence_ops_finished = {
 	.get_driver_name = drm_sched_fence_get_driver_name,
 	.get_timeline_name = drm_sched_fence_get_timeline_name,
+	.enable_signaling = drm_sched_fence_enable_signaling,
+	.wait = dma_fence_default_wait,	/* 4.4.302 BUG_ON(!ops->wait) */
 	.release = drm_sched_fence_release_finished,
 };
 
