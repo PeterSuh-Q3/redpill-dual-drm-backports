@@ -268,6 +268,11 @@ struct rcu_work;
 #ifndef wait_queue_entry_t
 typedef wait_queue_t wait_queue_entry_t;
 #endif
+/* struct wait_queue_entry is the 5.4 name for struct __wait_queue */
+#ifndef _BPI_WAIT_QUEUE_ENTRY_STRUCT
+#define _BPI_WAIT_QUEUE_ENTRY_STRUCT
+#define wait_queue_entry __wait_queue
+#endif
 #ifndef init_wait_entry
 #define init_wait_entry(entry, flags) init_waitqueue_entry(entry, current)
 #endif
@@ -353,6 +358,9 @@ static inline void device_link_remove(void *consumer,
 
 /* --- scatterlist: ensure SG_CHAIN is visible --- */
 #include <linux/scatterlist.h>
+#ifndef SG_CHAIN
+#define SG_CHAIN 0x01UL
+#endif
 
 /* --- dma_resv: dma_resv_lock_slow_interruptible (5.x) --- */
 #include <linux/reservation.h>
