@@ -93,19 +93,32 @@ jobs:
           grep "WARNING:.*undefined" /tmp/build.log || echo "(없음)"
           echo "#################################################"
 
-      - name: "Push .ko to gitout branch"
+      - name: "Push .ko to gitout branch (module-output)"
         run: |
-          BR="module-output/geminilake-${{ matrix.version }}-4.4.302"
+          DEST="thirdparty/geminilake-${{ matrix.version }}-4.4.302"
+          BR="module-output"
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout --orphan pub_tmp
-          git rm -rf . >/dev/null 2>&1 || true
-          mkdir -p modules
-          find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} modules/ \;
-          git add modules
-          git commit -m "build output geminilake-${{ matrix.version }}-4.4.302 dual-drm (i915+amdgpu) [skip ci]"
-          git push -f origin "pub_tmp:${BR}"
-          echo "[PUSHED] origin ${BR} ($(ls modules/*.ko | wc -l) ko)"
+
+          # module-output 브랜치가 없으면 orphan으로 초기화, 있으면 체크아웃
+          git fetch origin "${BR}" 2>/dev/null && \
+            git checkout "${BR}" || \
+            { git checkout --orphan "${BR}" && git rm -rf . >/dev/null 2>&1 || true; }
+
+          mkdir -p "${DEST}"
+          find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} "${DEST}/" \;
+          git add "${DEST}"
+          git commit -m "build output geminilake-${{ matrix.version }}-4.4.302 dual-drm (i915+amdgpu) [skip ci]" || \
+            echo "[skip] no changes"
+
+          # 병렬 matrix 충돌 방지: push 실패 시 rebase 후 재시도
+          for i in 1 2 3; do
+            git push origin "${BR}" && break
+            echo "[retry $i] pull --rebase and retry..."
+            git pull --rebase origin "${BR}" && git push origin "${BR}" && break
+            sleep 5
+          done
+          echo "[PUSHED] origin ${BR}/${DEST} ($(ls ${DEST}/*.ko | wc -l) ko)"
 
       - name: "[VERIFY] host 중복 export 점검"
         if: always()
