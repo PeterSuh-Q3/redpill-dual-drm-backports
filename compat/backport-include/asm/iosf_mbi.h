@@ -22,7 +22,7 @@ static inline int
 iosf_mbi_unregister_pmic_bus_access_notifier_unlocked(struct notifier_block *nb)
 { return 0; }
 
-/* Prevent the real kernel header from being pulled in again */
-#define _ASM_X86_IOSF_MBI_H
+/* Prevent the real kernel header (guard: IOSF_MBI_SYMS_H) from being re-included */
+#define IOSF_MBI_SYMS_H
 
 #endif /* _BACKPORT_ASM_IOSF_MBI_H */
