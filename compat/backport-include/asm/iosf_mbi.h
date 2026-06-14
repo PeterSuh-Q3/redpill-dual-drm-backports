@@ -1,16 +1,28 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * 4.4.302 compat: CONFIG_IOSF_MBI=y but symbols not EXPORT_SYMBOL'd.
- * Force the #else (stub) branch in the original header by undefining
- * CONFIG_IOSF_MBI before include_next.
+ * 4.4.302 compat: CONFIG_IOSF_MBI=y but symbols are NOT EXPORT_SYMBOL'd.
+ * Replace entire header with inline stubs so i915 builds without unresolved
+ * references. include_next is intentionally absent — the real header would
+ * expose extern declarations that cannot be resolved at module load time.
  */
 #ifndef _BACKPORT_ASM_IOSF_MBI_H
 #define _BACKPORT_ASM_IOSF_MBI_H
 
-#ifdef CONFIG_IOSF_MBI
-#undef CONFIG_IOSF_MBI
-#endif
+#include <linux/notifier.h>
 
-#include_next <asm/iosf_mbi.h>
+static inline void iosf_mbi_punit_acquire(void) {}
+static inline void iosf_mbi_punit_release(void) {}
+static inline void iosf_mbi_assert_punit_acquired(void) {}
+
+static inline int
+iosf_mbi_register_pmic_bus_access_notifier(struct notifier_block *nb)
+{ return 0; }
+
+static inline int
+iosf_mbi_unregister_pmic_bus_access_notifier_unlocked(struct notifier_block *nb)
+{ return 0; }
+
+/* Prevent the real kernel header (guard: IOSF_MBI_SYMS_H) from being re-included */
+#define IOSF_MBI_SYMS_H
 
 #endif /* _BACKPORT_ASM_IOSF_MBI_H */
