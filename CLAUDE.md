@@ -1,10 +1,116 @@
-# CLAUDE.md — Redpill Dual DRM Backport 설계서 (Rev.2)
+# CLAUDE.md — Redpill Dual DRM Backport 설계서 (Rev.2 + §0 Rev.3 현황)
 
 > **프로젝트**: Redpill i915 + amdgpu Dual DRM OOT Backport
-> **작성일**: 2026-06-13
-> **리비전**: Rev.2 (cherry-pick 전략 반영 / 리뷰 수정사항 적용)
+> **작성일**: 2026-06-13 (Rev.2) / **현행화**: 2026-06-14 (§0 Rev.3)
+> **리비전**: Rev.2 (설계 비전) + §0 Rev.3 (실제 구현 현황)
 > **기준 커널**: 4.4.302 (베이스), 5.10.55 (레퍼런스 성공 빌드)
 > **목표 OOT 소스**: Linux 5.4 LTS + CML-H/S Cherry-pick
+
+> ℹ️ **§1 이하 본문은 초기 설계 비전(Rev.2)이며 그대로 보존한다.**
+> 실제 빌드 인프라 / compat 구조 / 해결된 이슈는 아래 **§0 (Rev.3)** 이 정본.
+> 설계와 충돌하는 부분은 §0 을 우선한다.
+
+---
+
+## 0. 실제 구현 현황 (Rev.3 — 정본)
+
+### 0.1 진행 파일럿: geminilake / 7.3 / 4.4.302
+
+설계서의 광역 목표(GEN5~GEN11, CML-H/S, GCN4~RDNA1) 중 **첫 실증 타깃**.
+
+| 항목 | 값 |
+|---|---|
+| 플랫폼 | geminilake / DSM 7.3 / 커널 **4.4.302** |
+| Intel iGPU | Gemini Lake (GEN9 Atom) — i915 |
+| AMD dGPU | Polaris12 (WX 3100, `1002:6985`) — amdgpu |
+| 실기 | ECS H110M4-C2D |
+
+실기 검증:
+- **amdgpu**: ✅ 정상 — `/dev/dri/card1`+`renderD129`, `Initialized amdgpu 3.35.0`
+- **i915**: 🔧 부팅 panic(아래 이슈 5) 수정 후 재검증 대기
+
+### 0.2 빌드 인프라 — GitHub Actions (설계서 §10 scripts 대체)
+
+로컬 `scripts/01~07_*.sh` 는 **사용하지 않는다.** 실제 빌드는 Synology 툴체인
+컨테이너 기반 CI 워크플로우:
+
+```
+.github/workflows/
+  step4-i915-geminilake-44302.yml      step5-amdgpu-geminilake-44302.yml
+  step6-dual-drm-geminilake-44302.yml  verify-modules-geminilake-44302.yml
+```
+
+VERIFY 는 KLIB `System.map` 으로 `depmod -e` 를 돌려 실기 `modprobe` 의
+미충족 심볼을 사전 탐지한다(펌웨어 없이 심볼만 점검).
+
+### 0.3 브랜치 구조 / 프로세스 규칙
+
+| 브랜치 | 역할 |
+|---|---|
+| `main` | 레시피(compat shim / backport-include / Makefile / 워크플로우 / 문서) |
+| `vendor/drm-5.4` | 5.4 LTS DRM 원본 vendoring |
+| `integration/dual-drm` | vendor + main 머지 + **소스 직접 패치**. CI 빌드 대상 |
+| `module-output` | CI 산출 `.ko` (orphan) |
+
+- **레시피(헤더/shim/Makefile)** 변경 → `main`.
+- **소스 자체 패치** → `integration/dual-drm` 직접 편집.
+- ★ `main` 변경 후 반드시 `integration` 에 `git merge main` → push → 빌드 트리거.
+  (누락 시 CI 가 stale integration 빌드)
+
+### 0.4 compat 레이어 (설계서 §6 매핑 방식 폐기)
+
+4.4.302 는 `dma_fence_*` 를 **네이티브 export** 하므로 §6 의 `dma_fence`→`fence`
+매핑은 불필요·폐기. 실제 작업은 **누락 API 보강 + ABI 차이 보정**:
+
+```
+compat/backport-include/linux/*.h   시스템 헤더 가로채기(include_next)
+                                    wait/workqueue/xarray/dma-resv/llist ...
+compat/kcl_compat.h                 -include force-include (전 TU shim 주입)
+compat/{drm,i915,amdgpu,reservation}_compat.h
+```
+
+### 0.5 산출물 / 배포
+
+- CI → `module-output:thirdparty/geminilake-7.3-4.4.302/` 에 `.ko` push.
+- 거기서 추출 → `mshell-modules` / `tcrp-modules` 릴리즈(**26.6.12**,
+  `geminilake-7.3-4.4.302.tgz`)로 증분 병합 배포 + `.json` sha256 갱신.
+- 산출 모듈(7개 핵심): `amdgpu drm drm_kms_helper i915 ttm gpu-sched
+  drm_panel_orientation_quirks` (+ 모듈팩의 fb/cfb*/sys* 보조).
+- **duplicate symbol** 로 제거된 것: `hdmi.ko`, `drm_mipi_dsi.ko`.
+
+### 0.6 해결된 핵심 이슈 (RIP → 원인 → 조치)
+
+1. **duplicate symbol** — `hdmi.ko`/`drm_mipi_dsi.ko` 가 drm 코어와 심볼 중복
+   → 모듈팩에서 제거.
+2. **Unknown symbol 3종** (DSM 미export):
+   - `queue_rcu_work` → `backport-include/linux/workqueue.h` 에 `static inline` 구현.
+   - `trace_dma_fence_signaled` → `dma-fence.c`/`intel_breadcrumbs.c` 호출부 주석.
+   - `perf_event_update_userpage` → `amdgpu_pmu.c` 호출부 주석.
+3. **amdgpu 헤드리스** — `amdgpu_fbdev_init()` 가 fbdev 에뮬 경로에서 불필요.
+   `amdgpu_device.c` 에서 호출 제거.
+4. **`dma_fence_init` BUG** (RIP `dma_fence_init+0x73`, `dma-fence.c:561`):
+   4.4.302 는 `BUG_ON(!ops->wait || !ops->enable_signaling || ...)`.
+   5.4 에서 두 필드가 선택적이 되어 NULL → BUG. **7개 `dma_fence_ops`** 전부에
+   `.wait = dma_fence_default_wait` + `.enable_signaling` stub 추가
+   (amdgpu_fence / drm_sched scheduled·finished / drm_crtc / amdkfd /
+   i915 sw_fence_work · stub · clear_pages).
+5. **i915 부팅 panic** (RIP `finish_wait+0x43`, CR2 0x96,
+   `intel_atomic_commit_fence_wait` → modeset):
+   4.4.302 `bit_waitqueue()` 는 **per-zone `wait_table`** 방식인데 5.4(4.17+)는
+   전역 `bit_wait_table[]` 로 변경됨 → `reset.flags` 경로가 손상된 테이블 참조.
+   헤드리스라 modeset reset race 대기 불필요 → `intel_display.c` 에서
+   `bit_waitqueue` 대기 경로 제거, `commit_ready` sw_fence 대기만 유지.
+
+> ⚠️ **잔존 위험**: 같은 4.4.302 `bit_waitqueue` 의존 패턴이 런타임 경로에 남아 있음 —
+> `i915_active.c`(`wait_on_bit`), `intel_wakeref.c`(`wait_var_event`/`wake_up_var`),
+> `intel_reset.c`(`wait_on_bit`). 실 GPU reset / runtime PM 진입 시 동일 panic 가능.
+> 부팅 통과 확인 후 필요하면 동일 방식으로 정리한다.
+
+### 0.7 분석 절차 (오류 발생 시)
+
+RIP → Call Trace → 원인 순. OOT vs 커널 내장 함수 구분(RIP 주소가 모듈/커널
+어디인지), 4.4.302 GPL 원본(`~/Downloads/linux-4.4.302/`)과 5.4 소스의
+ABI/시그니처 차이 대조.
 
 ---
 
