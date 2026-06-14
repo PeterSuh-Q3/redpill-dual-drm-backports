@@ -1,70 +1,79 @@
 # Redpill Dual DRM Backport
 
-Redpill DSM 커널 **4.4.302** 환경에 인텔 i915(GEN5~GEN11) + AMD amdgpu(GCN4~RDNA1)를
-동시 지원하는 **Dual DRM OOT 백포트 모듈**. OOT 베이스는 **Linux 5.4 LTS**,
-CML-H/S 확장은 **5.5-rc1 Cherry-pick**.
+Redpill DSM 커널 **4.4.302** 환경에 인텔 i915 + AMD amdgpu 를 **동시 지원**하는
+Dual DRM OOT 백포트. OOT 베이스는 **Linux 5.4 LTS**.
 
-> 설계 전문은 [`CLAUDE.md`](./CLAUDE.md) 참조 (Rev.2).
+> 전체 설계 비전은 [`CLAUDE.md`](./CLAUDE.md) 참조.
+> CLAUDE.md **§0 (Rev.3)** 에 실제 구현 현황 / 설계 대비 변경점이 정리되어 있다.
 
-## 핵심 전략
+## 현재 진행 파일럿
 
-- **OOT 베이스**: Linux 5.4 LTS 단일 소스 (i915 GEN11 + amdgpu RDNA1 동시 커버)
-- **PCI Device ID Override 패치 제거**: MT54 네이티브 인식으로 대체. CML-H/S 는 Cherry-pick
-- **Dual DRM 단일 버전 원칙**: drm_core / TTM 을 5.4 단일 인스턴스로 통일 (심볼 충돌 방지)
-- **compat shim**: 4.4 ↔ 5.4 API gap 보정 레이어
+설계서의 광범위 목표(GEN5~GEN11, CML-H/S, GCN4~RDNA1) 중 **첫 실증 타깃**을 진행 중:
 
-## 디렉토리 구조
+| 항목 | 값 |
+|---|---|
+| 플랫폼 | **geminilake / DSM 7.3 / 커널 4.4.302** |
+| Intel iGPU | Gemini Lake (GEN9 Atom) — i915 |
+| AMD dGPU | Polaris12 (WX 3100, `1002:6985`) — amdgpu |
+| 검증기 | ECS H110M4-C2D 실기 |
+
+실기 현황:
+- **amdgpu**: ✅ 정상 로드 — `/dev/dri/card1`, `renderD129` 생성, `Initialized amdgpu 3.35.0`
+- **i915**: 🔧 부팅 panic 수정 후 재검증 대기 (§0 해결 이슈 5 참조)
+
+## 빌드 (GitHub Actions)
+
+로컬 `scripts/*.sh` 7단계 대신 **CI 워크플로우**로 빌드한다 (Synology 툴체인 컨테이너 사용).
 
 ```
-compat/                  4.4.302 전용 shim 레이어 (§6)
-  drm_compat.{h,c}         공통 DRM API 매핑 + drm_atomic stub
-  dma_fence_compat.c       fence -> dma_fence 브릿지
-  reservation_compat.h     dma_resv -> reservation_object 전체 accessor
-  i915_compat.h            i915 전용 shim
-  amdgpu_compat.h          amdgpu 전용 shim
-  cml_hs_compat.h          CML-H/S cherry-pick 전용
-include/drm/
-  i915_pciids_cml_hs.h     CML-H/S PCI ID 매크로 (§9.2)
-drivers/gpu/drm/
-  drm_core/                5.4 LTS 단일 소스 (Step1 에서 추출)
-  i915/                    MT54 OOT + cherry-pick 산출물
-  amd/{amdgpu,display}/    5.4 amdgpu + DC
-firmware/{i915,amdgpu}/    GuC/HuC/RDNA1 펌웨어 (§12.2)
-scripts/                   빌드 7단계 (§10)
-Kconfig / Makefile         빌드 설정 (§8)
+.github/workflows/
+  step4-i915-geminilake-44302.yml     # i915 단독
+  step5-amdgpu-geminilake-44302.yml   # amdgpu 단독
+  step6-dual-drm-geminilake-44302.yml # Dual 통합 (정식 산출)
+  verify-modules-geminilake-44302.yml # depmod -e 기반 심볼 검증
 ```
-
-> `drm_core/`, `i915/`, `amd/` 의 실제 커널 소스는 라이선스/용량 문제로 동봉하지
-> 않으며 `scripts/01_extract_drm_core.sh` 가 5.4 LTS 에서 추출한다.
-> 각 디렉토리의 `EXTRACT.md` 참조.
-
-## 빌드 절차 (§10)
 
 ```bash
-# 0) 4.4.302 커널 소스 경로 지정
-export KSRC=/path/to/4.4.302/kernel
-
-# 1) 5.4 LTS drm_core 추출
-scripts/01_extract_drm_core.sh
-
-# 2) compat shim 심볼 검증
-scripts/02_build_shim_verify.sh
-
-# 3) CML-H/S cherry-pick 적용
-scripts/03_cherrypick_cml_hs.sh
-
-# 4~6) 단독 -> 통합 빌드
-scripts/04_build_i915.sh
-scripts/05_build_amdgpu.sh
-scripts/06_build_dual.sh
-
-# 7) 기능 검증 (QSV / VCN / Dual 트랜스코딩)
-scripts/07_functional_test.sh input.mkv
+# integration/dual-drm 브랜치 기준으로 트리거
+gh workflow run step6-dual-drm-geminilake-44302.yml --ref integration/dual-drm
+gh workflow run verify-modules-geminilake-44302.yml --ref integration/dual-drm
 ```
 
-## DSM 환경 제약 (§12)
+산출 `.ko` 는 `module-output` 브랜치(`thirdparty/geminilake-7.3-4.4.302/`)로 push 되며,
+거기서 추출해 `mshell-modules` / `tcrp-modules` 릴리즈로 배포한다.
 
-- 모듈 서명: Redpill loader hook 또는 `module.sig_enforce=0`
-- 펌웨어 경로: `/usr/lib/firmware/` 또는 심링크 보정
-- device node: udev 부재 시 `rc.local` 에서 수동 mknod
-- 권장 파라미터: `i915.enable_guc=2 amdgpu.vm_size=64 amdgpu.vram_limit=256`
+## 브랜치 구조
+
+| 브랜치 | 역할 |
+|---|---|
+| `main` | 레시피 — compat shim / backport-include / Makefile / 워크플로우 / 문서 |
+| `vendor/drm-5.4` | 5.4 LTS DRM 원본 vendoring |
+| `integration/dual-drm` | vendor 소스 + main 머지 + **소스 직접 패치**. CI 빌드 대상 |
+| `module-output` | CI 산출 `.ko` (orphan) |
+
+> ⚠️ **프로세스 규칙**: `main` 레시피 변경 후 반드시
+> `integration/dual-drm` 에 `git merge main` → push → 그 다음 빌드 트리거.
+> (머지 누락 시 CI 가 stale integration 을 빌드)
+> 소스 자체 패치는 `integration/dual-drm` 에서 직접 수정.
+
+## compat 레이어 (실제 구조)
+
+```
+compat/
+  backport-include/linux/*.h   시스템 헤더를 가로채 4.4.302 누락 API 제공
+                               (wait.h, workqueue.h, xarray.h, dma-resv.h ...)
+  kcl_compat.h                 -include force-include — 전 TU 에 shim 주입
+  drm_compat.h / i915_compat.h / amdgpu_compat.h / reservation_compat.h
+  dma-fence-chain.c            보조 소스
+```
+
+> 설계서(§6)의 `dma_fence`→`fence` 매핑 방식은 폐기되었다. 4.4.302 가
+> 이미 `dma_fence_*` 를 네이티브로 export 하므로 매핑이 아니라
+> **누락 API 보강 + ABI 차이 보정**이 실제 작업이다.
+
+## DSM 환경 제약
+
+- 모듈 서명: Redpill loader hook (서명 미적용 OOT 적재)
+- 헤드리스: 디스플레이 출력 미사용 → fbdev 에뮬레이션 제거 (§0 이슈 3)
+- device node: 부팅 시 `/dev/dri/card*`, `renderD*` 생성 확인
+- amdgpu VM size 64GB 는 GPU 가상주소 공간으로 정상값 (시스템 RAM 무관)
