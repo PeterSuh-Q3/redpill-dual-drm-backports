@@ -601,6 +601,11 @@ void intel_fbdev_set_suspend(struct drm_device *dev, int state, bool synchronous
 
 void intel_fbdev_output_poll_changed(struct drm_device *dev)
 {
+	/* DSM headless: fbdev hotplug triggers drm_wait_one_vblank in workqueue
+	 * context, causing wq_worker_sleeping/kthread_data NULL deref on 4.4.302.
+	 * Skip entirely — no display attached. */
+	return;
+
 	struct intel_fbdev *ifbdev = to_i915(dev)->fbdev;
 	bool send_hpd;
 
