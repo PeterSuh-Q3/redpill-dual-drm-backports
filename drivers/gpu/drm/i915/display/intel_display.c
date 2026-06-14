@@ -13879,18 +13879,19 @@ static void intel_atomic_helper_free_state_worker(struct work_struct *work)
 
 static void intel_atomic_commit_fence_wait(struct intel_atomic_state *intel_state)
 {
-	struct wait_queue_entry wait_fence, wait_reset;
+	struct wait_queue_entry wait_fence;
 	struct drm_i915_private *dev_priv = to_i915(intel_state->base.dev);
 
+	/*
+	 * 4.4.302 호환: bit_waitqueue()가 per-zone wait_table(zone->wait_table)
+	 * 방식이라 5.4 전역 bit_wait_table 시맨틱과 달라 reset.flags 경로에서
+	 * NULL wait_table 접근으로 panic(CR2 0x96). 헤드리스 VAAPI 환경에서는
+	 * modeset reset race 대기가 불필요하므로 commit_ready sw_fence만 대기.
+	 */
 	init_wait_entry(&wait_fence, 0);
-	init_wait_entry(&wait_reset, 0);
 	for (;;) {
 		prepare_to_wait(&intel_state->commit_ready.wait,
 				&wait_fence, TASK_UNINTERRUPTIBLE);
-		prepare_to_wait(bit_waitqueue(&dev_priv->gt.reset.flags,
-					      I915_RESET_MODESET),
-				&wait_reset, TASK_UNINTERRUPTIBLE);
-
 
 		if (i915_sw_fence_done(&intel_state->commit_ready) ||
 		    test_bit(I915_RESET_MODESET, &dev_priv->gt.reset.flags))
@@ -13899,9 +13900,6 @@ static void intel_atomic_commit_fence_wait(struct intel_atomic_state *intel_stat
 		schedule();
 	}
 	finish_wait(&intel_state->commit_ready.wait, &wait_fence);
-	finish_wait(bit_waitqueue(&dev_priv->gt.reset.flags,
-				  I915_RESET_MODESET),
-		    &wait_reset);
 }
 
 static void intel_atomic_cleanup_work(struct work_struct *work)
