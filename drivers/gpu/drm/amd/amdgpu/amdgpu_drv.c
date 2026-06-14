@@ -1521,3 +1521,4 @@ module_exit(amdgpu_exit);
 MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL and additional rights");
+MODULE_INFO(mshell_build, "MSHELL@PeterSuh-Q3");
