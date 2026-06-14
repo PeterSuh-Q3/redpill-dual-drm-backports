@@ -10,6 +10,10 @@
 
 #include <linux/notifier.h>
 
+/* Action values used by intel_uncore.c notifier callbacks */
+#define MBI_PMIC_BUS_ACCESS_BEGIN	1
+#define MBI_PMIC_BUS_ACCESS_END		2
+
 static inline void iosf_mbi_punit_acquire(void) {}
 static inline void iosf_mbi_punit_release(void) {}
 static inline void iosf_mbi_assert_punit_acquired(void) {}
