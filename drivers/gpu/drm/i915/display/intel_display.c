@@ -16054,6 +16054,11 @@ static void intel_update_fdi_pll_freq(struct drm_i915_private *dev_priv)
 
 static int intel_initial_commit(struct drm_device *dev)
 {
+	/* DSM headless: intel_atomic_commit_tail crashes on 4.4.302 due to
+	 * struct intel_atomic_state layout mismatch at cdclk offset.
+	 * Skip initial commit — not required for headless NAS operation. */
+	return 0;
+
 	struct drm_atomic_state *state = NULL;
 	struct drm_modeset_acquire_ctx ctx;
 	struct drm_crtc *crtc;
