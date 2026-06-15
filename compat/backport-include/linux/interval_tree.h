@@ -1,40 +1,35 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * interval_tree backport shim: 4.4.302 kernel exports interval_tree_* with
- * struct rb_root *, while 5.4 OOT code passes struct rb_root_cached *.
- * Wrap the 4.4.302 symbols so callers can use rb_root_cached transparently.
+ * interval_tree backport: 4.4.302 kernel uses rb_root * API while 5.4 OOT
+ * code uses rb_root_cached *. Replace the kernel header entirely and provide
+ * our own implementation (compat/interval_tree.c) built into the module.
  */
 #ifndef _BACKPORT_LINUX_INTERVAL_TREE_H
 #define _BACKPORT_LINUX_INTERVAL_TREE_H
 
-#include_next <linux/interval_tree.h>
 #include <linux/rbtree.h>
 
-/* 4.4.302 kernel provides interval_tree_* with rb_root * — wrap for rb_root_cached callers */
-static inline void
-__bp_interval_tree_insert(struct interval_tree_node *node, struct rb_root_cached *root)
-{
-	interval_tree_insert(node, &root->rb_root);
-}
+struct interval_tree_node {
+	struct rb_node rb;
+	unsigned long start;
+	unsigned long last;
+	unsigned long __subtree_last;
+};
 
-static inline void
-__bp_interval_tree_remove(struct interval_tree_node *node, struct rb_root_cached *root)
-{
-	interval_tree_remove(node, &root->rb_root);
-}
+extern void
+interval_tree_insert(struct interval_tree_node *node,
+		     struct rb_root_cached *root);
 
-static inline struct interval_tree_node *
-__bp_interval_tree_iter_first(struct rb_root_cached *root,
-			      unsigned long start, unsigned long last)
-{
-	return interval_tree_iter_first(&root->rb_root, start, last);
-}
+extern void
+interval_tree_remove(struct interval_tree_node *node,
+		     struct rb_root_cached *root);
 
-#undef  interval_tree_insert
-#undef  interval_tree_remove
-#undef  interval_tree_iter_first
-#define interval_tree_insert(node, root)           __bp_interval_tree_insert(node, root)
-#define interval_tree_remove(node, root)           __bp_interval_tree_remove(node, root)
-#define interval_tree_iter_first(root, start, end) __bp_interval_tree_iter_first(root, start, end)
+extern struct interval_tree_node *
+interval_tree_iter_first(struct rb_root_cached *root,
+			 unsigned long start, unsigned long last);
+
+extern struct interval_tree_node *
+interval_tree_iter_next(struct interval_tree_node *node,
+			unsigned long start, unsigned long last);
 
 #endif /* _BACKPORT_LINUX_INTERVAL_TREE_H */

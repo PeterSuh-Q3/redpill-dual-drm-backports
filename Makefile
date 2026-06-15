@@ -31,8 +31,10 @@ LINUXINCLUDE := -I$(src)/compat/backport-include -I$(src)/include -I$(src)/inclu
 obj-y += drivers/gpu/drm/
 obj-$(CONFIG_AGP_INTEL) += drivers/char/agp/
 
-# ── compat shim (header-only) ──
-# .c 빌드 없음. drm_compat.h 를 전 컴파일에 force-include (OOT 하위 디렉토리 전파용).
+# ── compat shim ──
+# interval_tree.c: rb_root_cached * 버전을 모듈에 내장 (4.4.302 커널 export 미의존)
+obj-y += compat/
+# drm_compat.h 를 전 컴파일에 force-include (OOT 하위 디렉토리 전파용).
 # (최상위 ccflags-y 는 drivers/gpu/drm/* 로 전파되지 않으므로 KCPPFLAGS 사용)
 COMPAT_CPPFLAGS := -I$(PWD)/compat -I$(PWD)/include -include $(PWD)/compat/drm_compat.h
 
