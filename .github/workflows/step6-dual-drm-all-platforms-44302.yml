@@ -210,9 +210,17 @@ jobs:
 
           echo ""
           if [ ${#missing[@]} -eq 0 ]; then
-            echo "✅ 전 플랫폼 20/20 업데이트 확인 완료 — sync-from-dual-drm 트리거 가능"
+            echo "✅ 전 플랫폼 20/20 업데이트 확인 완료"
           else
             echo "❌ 미업데이트 플랫폼 ${#missing[@]}개:"
             for m in "${missing[@]}"; do echo "   - $m"; done
             exit 1
           fi
+
+      - name: "copy-thirdparty-to-mshell 자동 트리거"
+        run: |
+          gh workflow run copy-thirdparty-to-mshell.yml \
+            --repo PeterSuh-Q3/redpill-dual-drm-backports
+          echo "✅ copy-thirdparty-to-mshell 트리거 완료"
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
