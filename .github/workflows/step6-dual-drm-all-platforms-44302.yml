@@ -131,29 +131,30 @@ jobs:
           grep "WARNING:.*undefined" /tmp/build.log || echo "(없음)"
           echo "#################################################"
 
-      - name: "Commit .ko to main branch thirdparty/"
+      - name: "Push .ko to module-output branch"
         run: |
           DEST="thirdparty/${{ matrix.platform }}-${{ matrix.version }}-4.4.302"
+          BR="module-output"
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git fetch origin main
-          git checkout main
+          git fetch origin "${BR}" 2>/dev/null && \
+            git checkout "${BR}" || \
+            { git checkout --orphan "${BR}" && git rm -rf . >/dev/null 2>&1 || true; }
 
           mkdir -p "${DEST}"
           find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} "${DEST}/" \;
           find "$GITHUB_WORKSPACE/drivers/char/agp" -name "*.ko" -exec cp -f {} "${DEST}/" \;
-          # interval_tree.ko는 최상위에 생성됨 (obj-m in top-level Makefile)
           find "$GITHUB_WORKSPACE" -maxdepth 1 -name "*.ko" -exec cp -f {} "${DEST}/" \;
           git add "${DEST}"
           git commit -m "build output ${{ matrix.platform }}-${{ matrix.version }}-4.4.302 dual-drm (i915+amdgpu) [skip ci]" || \
             echo "[skip] no changes"
 
           for i in $(seq 1 20); do
-            git push origin main && { echo "[PUSHED] main/${DEST} ($(ls ${DEST}/*.ko 2>/dev/null | wc -l) ko)"; break; }
+            git push origin "${BR}" && { echo "[PUSHED] ${BR}/${DEST} ($(ls ${DEST}/*.ko 2>/dev/null | wc -l) ko)"; break; }
             echo "[retry $i] pull --rebase..."
             sleep $((RANDOM % 8 + 2))
-            git pull --rebase origin main || true
+            git pull --rebase origin "${BR}" || true
           done
 
       - name: "[VERIFY] host 중복 export 점검"
