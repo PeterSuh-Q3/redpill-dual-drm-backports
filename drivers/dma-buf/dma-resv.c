@@ -297,6 +297,11 @@ void dma_resv_add_excl_fence(struct dma_resv *obj, struct dma_fence *fence)
 		dma_fence_put(rcu_dereference_protected(old->shared[i],
 						dma_resv_held(obj)));
 
+	/* 4.4.302 backport: 4.4 dma_fence_release WARNs if cb_list is
+	 * non-empty at release time. Signal old fence first to drain
+	 * cb_list; dma_fence_signal() is a no-op on already-signaled fences. */
+	if (old_fence)
+		dma_fence_signal(old_fence);
 	dma_fence_put(old_fence);
 }
 EXPORT_SYMBOL(dma_resv_add_excl_fence);
