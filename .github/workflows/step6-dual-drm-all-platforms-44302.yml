@@ -145,6 +145,7 @@ jobs:
           mkdir -p "${DEST}"
           find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} "${DEST}/" \;
           find "$GITHUB_WORKSPACE/drivers/char/agp" -name "*.ko" -exec cp -f {} "${DEST}/" \;
+          find "$GITHUB_WORKSPACE/compat" -name "*.ko" -exec cp -f {} "${DEST}/" \;
           git add "${DEST}"
           git commit -m "build output ${{ matrix.platform }}-${{ matrix.version }}-4.4.302 dual-drm (i915+amdgpu) [skip ci]" || \
             echo "[skip] no changes"

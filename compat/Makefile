@@ -9,5 +9,6 @@
 # 헤더 주입: 최상위 Makefile 이 KCPPFLAGS(-include compat/drm_compat.h)로 전 컴파일에 적용.
 # i915_compat.h / amdgpu_compat.h 는 드라이버별로 patches/ 에서 #include 주입 예정.
 #
-# interval_tree: 4.4.302 커널은 rb_root * API → rb_root_cached * 버전을 모듈에 내장
-obj-y += interval_tree.o
+# interval_tree: 4.4.302 커널은 rb_root * API → 별도 모듈(interval_tree.ko)로 빌드해
+# EXPORT_SYMBOL_GPL 로 제공, i915/amdgpu 적재 전 먼저 insmod
+obj-m += interval_tree.o
