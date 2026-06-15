@@ -1145,18 +1145,21 @@ intel_dp_aux_wait_done(struct intel_dp *intel_dp)
 	struct drm_i915_private *i915 = dp_to_i915(intel_dp);
 	i915_reg_t ch_ctl = intel_dp->aux_ch_ctl_reg(intel_dp);
 	u32 status;
-	bool done;
+	int ret;
 
-#define C (((status = intel_uncore_read_notrace(&i915->uncore, ch_ctl)) & DP_AUX_CH_CTL_SEND_BUSY) == 0)
-	done = wait_event_timeout(i915->gmbus_wait_queue, C,
-				  msecs_to_jiffies_timeout(10));
+	/* 4.4.302 backport: wait_event_timeout(gmbus_wait_queue) crashes in
+	 * finish_wait due to waitqueue ABI mismatch between 5.4 OOT and 4.4
+	 * kernel. Use register polling instead (original 4.x behavior). */
+	ret = intel_wait_for_register_fw(&i915->uncore, ch_ctl,
+					 DP_AUX_CH_CTL_SEND_BUSY, 0, 10);
+
+	status = intel_uncore_read_notrace(&i915->uncore, ch_ctl);
 
 	/* just trace the final value */
 	trace_i915_reg_rw(false, ch_ctl, status, sizeof(status), true);
 
-	if (!done)
+	if (ret)
 		DRM_ERROR("dp aux hw did not signal timeout!\n");
-#undef C
 
 	return status;
 }
