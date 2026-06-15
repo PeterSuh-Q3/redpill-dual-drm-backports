@@ -65,7 +65,7 @@ static inline void ITPREFIX ## _augment_rotate(struct rb_node *rb_old,	      \
 	ITPREFIX ## _augment_propagate(rb_old, NULL);			      \
 }									      \
 									      \
-static const struct rb_augment_callbacks ITPREFIX ## _augment_callbacks = {   \
+static const struct rb_augment ITPREFIX ## _augment = {   \
 	.propagate = ITPREFIX ## _augment_propagate,			      \
 	.copy      = ITPREFIX ## _augment_copy,				      \
 	.rotate    = ITPREFIX ## _augment_rotate			      \
@@ -101,7 +101,7 @@ ITSTATIC void ITPREFIX ## _remove(ITSTRUCT *node,			      \
 				  struct rb_root_cached *root)		      \
 {									      \
 	rb_erase_augmented_cached(&node->ITRB, root,			      \
-				  &ITPREFIX ## _augment_callbacks);	      \
+				  &ITPREFIX ## _augment);	      \
 }									      \
 									      \
 static ITTYPE ITPREFIX ## _subtree_search(ITSTRUCT *node,		      \
