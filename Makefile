@@ -32,8 +32,10 @@ obj-y += drivers/gpu/drm/
 obj-$(CONFIG_AGP_INTEL) += drivers/char/agp/
 
 # ── compat shim ──
-# interval_tree.c: rb_root_cached * 버전을 모듈에 내장 (4.4.302 커널 export 미의존)
-obj-y += compat/
+# interval_tree.ko: 최상위에서 obj-m으로 선언해야 독립 .ko로 링크됨
+# (obj-y 하위 디렉토리의 obj-m은 OOT M= 빌드에서 standalone .ko 미생성)
+obj-m += interval_tree.o
+interval_tree-y := compat/interval_tree.o
 # drm_compat.h 를 전 컴파일에 force-include (OOT 하위 디렉토리 전파용).
 # (최상위 ccflags-y 는 drivers/gpu/drm/* 로 전파되지 않으므로 KCPPFLAGS 사용)
 COMPAT_CPPFLAGS := -I$(PWD)/compat -I$(PWD)/include -include $(PWD)/compat/drm_compat.h
