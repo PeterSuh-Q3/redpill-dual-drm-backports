@@ -13,7 +13,26 @@
 #define dma_resv_unlock          reservation_object_unlock
 #define dma_resv_trylock         reservation_object_trylock
 #define dma_resv_init            reservation_object_init
-#define dma_resv_fini            reservation_object_fini
+/* 4.4.302 backport: signal all fences before fini to drain cb_list,
+ * preventing dma_fence_release WARN in __i915_gem_free_object_rcu path. */
+static inline void dma_resv_fini(struct reservation_object *obj)
+{
+	struct reservation_object_list *flist;
+	struct dma_fence *excl;
+	unsigned int i;
+
+	excl = reservation_object_get_excl(obj);
+	if (excl)
+		dma_fence_signal(excl);
+
+	flist = reservation_object_get_list(obj);
+	if (flist) {
+		for (i = 0; i < flist->shared_count; i++)
+			dma_fence_signal(flist->shared[i]);
+	}
+
+	reservation_object_fini(obj);
+}
 #define dma_resv_held            reservation_object_held
 #define dma_resv_assert_held     reservation_object_assert_held
 #define dma_resv_get_excl        reservation_object_get_excl
