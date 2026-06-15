@@ -149,13 +149,12 @@ jobs:
           git commit -m "build output ${{ matrix.platform }}-${{ matrix.version }}-4.4.302 dual-drm (i915+amdgpu) [skip ci]" || \
             echo "[skip] no changes"
 
-          for i in 1 2 3; do
-            git push origin main && break
-            echo "[retry $i] pull --rebase and retry..."
-            git pull --rebase origin main && git push origin main && break
-            sleep 5
+          for i in $(seq 1 20); do
+            git push origin main && { echo "[PUSHED] main/${DEST} ($(ls ${DEST}/*.ko 2>/dev/null | wc -l) ko)"; break; }
+            echo "[retry $i] pull --rebase..."
+            sleep $((RANDOM % 8 + 2))
+            git pull --rebase origin main || true
           done
-          echo "[PUSHED] main/${DEST} ($(ls ${DEST}/*.ko 2>/dev/null | wc -l) ko)"
 
       - name: "[VERIFY] host 중복 export 점검"
         if: always()
