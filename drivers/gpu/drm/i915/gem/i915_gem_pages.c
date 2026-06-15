@@ -424,7 +424,11 @@ i915_gem_object_get_sg(struct drm_i915_gem_object *obj,
 		if (ret && ret != -EEXIST)
 			goto scan;
 
-		entry = xa_mk_value(idx);
+		/* 4.4.302 backport: xa_mk_value() produces odd values which
+		 * trigger BUG_ON(radix_tree_is_indirect_ptr) in 4.4 kernel's
+		 * radix_tree_insert. Use even-aligned encoding instead:
+		 * (idx << 2) | 2  — even, non-NULL, distinct from real pointers. */
+		entry = (void *)(((unsigned long)idx << 2) | 2UL);
 		for (i = 1; i < count; i++) {
 			ret = radix_tree_insert(&iter->radix, idx + i, entry);
 			if (ret && ret != -EEXIST)
@@ -470,8 +474,9 @@ lookup:
 	 * sg entry's range.
 	 */
 	*offset = 0;
-	if (unlikely(xa_is_value(sg))) {
-		unsigned long base = xa_to_value(sg);
+	if (unlikely((unsigned long)sg & 2UL)) {
+		/* 4.4.302 backport: decode even-aligned value encoding (idx << 2) | 2 */
+		unsigned long base = (unsigned long)sg >> 2;
 
 		sg = radix_tree_lookup(&iter->radix, base);
 		GEM_BUG_ON(!sg);
