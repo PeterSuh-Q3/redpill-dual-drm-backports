@@ -25,8 +25,16 @@
 #define dma_resv_get_list(obj) \
 	reservation_object_get_list(obj)
 
-#define dma_resv_add_excl_fence(obj, fence) \
-	reservation_object_add_excl_fence(obj, fence)
+static inline void dma_resv_add_excl_fence(struct reservation_object *obj,
+					    struct dma_fence *fence)
+{
+	struct dma_fence *old = reservation_object_get_excl(obj);
+	/* 4.4.302 backport: 4.4 dma_fence_release WARNs if cb_list is
+	 * non-empty at release time. Signal old fence first to drain it. */
+	if (old)
+		dma_fence_signal(old);
+	reservation_object_add_excl_fence(obj, fence);
+}
 
 #define dma_resv_add_shared_fence(obj, fence) \
 	reservation_object_add_shared_fence(obj, fence)
