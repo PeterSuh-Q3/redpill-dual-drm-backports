@@ -172,3 +172,47 @@ jobs:
           done
           echo "=== 중복 export 총계: ${total} ==="
           grep "WARNING:.*undefined" /tmp/build.log || echo "(MODPOST WARNING 없음)"
+
+  verify:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: "전 플랫폼 thirdparty 업데이트 검증"
+        run: |
+          TRIGGER_SHA="${{ github.sha }}"
+          echo "워크플로우 트리거 SHA: ${TRIGGER_SHA}"
+          echo ""
+
+          PLATFORMS="geminilake apollolake broadwellnk broadwell broadwellnkv2 broadwellntbap denverton purley r1000 v1000"
+          VERSIONS="7.2 7.3"
+
+          missing=()
+          for platform in $PLATFORMS; do
+            for version in $VERSIONS; do
+              dir="thirdparty/${platform}-${version}-4.4.302"
+              # 트리거 SHA 이후 해당 디렉토리에 커밋이 있는지 확인
+              commit=$(git log "${TRIGGER_SHA}..HEAD" --oneline -- "${dir}" | head -1)
+              if [ -n "$commit" ]; then
+                ko_count=$(ls "${dir}"/*.ko 2>/dev/null | wc -l)
+                echo "  [OK] ${dir} — ${ko_count}개 ko (${commit})"
+              else
+                echo "  [FAIL] ${dir} — 이번 run에서 업데이트 없음"
+                missing+=("${dir}")
+              fi
+            done
+          done
+
+          echo ""
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "✅ 전 플랫폼 20/20 업데이트 확인 완료 — sync-from-dual-drm 트리거 가능"
+          else
+            echo "❌ 미업데이트 플랫폼 ${#missing[@]}개:"
+            for m in "${missing[@]}"; do echo "   - $m"; done
+            exit 1
+          fi
