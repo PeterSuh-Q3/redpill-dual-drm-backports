@@ -108,11 +108,12 @@ jobs:
             CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
             CONFIG_DRM_TTM=m CONFIG_DRM_SCHED=m \
             CONFIG_DRM_AMDGPU=m \
+            CONFIG_AGP_INTEL=m \
             KCPPFLAGS="$OOT_KCPPFLAGS" \
             modules 2>&1 | tee /tmp/build.log || true
 
           # 디버그 심볼 제거
-          find "$OOT_ROOT/drivers/gpu/drm" -name "*.ko" | while read ko; do
+          find "$OOT_ROOT" -name "*.ko" | while read ko; do
             ${CROSS_COMPILE}strip --strip-debug "$ko"
           done
 
@@ -143,6 +144,7 @@ jobs:
 
           mkdir -p "${DEST}"
           find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} "${DEST}/" \;
+          find "$GITHUB_WORKSPACE/drivers/char/agp" -name "*.ko" -exec cp -f {} "${DEST}/" \;
           git add "${DEST}"
           git commit -m "build output ${{ matrix.platform }}-${{ matrix.version }}-4.4.302 dual-drm (i915+amdgpu) [skip ci]" || \
             echo "[skip] no changes"

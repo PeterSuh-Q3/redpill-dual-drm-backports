@@ -29,6 +29,7 @@ LINUXINCLUDE := -I$(src)/compat/backport-include -I$(src)/include -I$(src)/inclu
 # drivers/gpu/drm/Makefile 이 CONFIG 로 drm.o / drm_kms_helper.o / ttm/ /
 # scheduler/(gpu-sched, §설계 Makefile 누락분 보완) / i915/ / amd/amdgpu/ 게이팅.
 obj-y += drivers/gpu/drm/
+obj-$(CONFIG_AGP_INTEL) += drivers/char/agp/
 
 # ── compat shim (header-only) ──
 # .c 빌드 없음. drm_compat.h 를 전 컴파일에 force-include (OOT 하위 디렉토리 전파용).
