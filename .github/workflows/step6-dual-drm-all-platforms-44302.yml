@@ -173,31 +173,3 @@ jobs:
           echo "=== 중복 export 총계: ${total} ==="
           grep "WARNING:.*undefined" /tmp/build.log || echo "(MODPOST WARNING 없음)"
 
-  copy:
-    needs: [build]
-    if: success()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: "전 플랫폼 thirdparty .ko 존재 검증"
-        run: |
-          PLATFORMS="geminilake apollolake broadwellnk broadwell broadwellnkv2 broadwellntbap denverton purley r1000 v1000"
-          VERSIONS="7.2 7.3"
-          missing=()
-          for platform in $PLATFORMS; do
-            for version in $VERSIONS; do
-              dir="thirdparty/${platform}-${version}-4.4.302"
-              n=$(ls "${dir}"/*.ko 2>/dev/null | wc -l)
-              [ "$n" -gt 0 ] && echo "  [OK] ${dir} (${n})" || { echo "  [FAIL] ${dir}"; missing+=("$dir"); }
-            done
-          done
-          [ ${#missing[@]} -eq 0 ] && echo "20/20 OK" || { printf "[FAIL] %s\n" "${missing[@]}"; exit 1; }
-
-      - name: "copy-thirdparty-to-mshell 트리거"
-        run: |
-          gh workflow run copy-thirdparty-to-mshell.yml \
-            --repo PeterSuh-Q3/redpill-dual-drm-backports
-        env:
-          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
