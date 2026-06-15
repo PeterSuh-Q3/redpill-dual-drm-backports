@@ -1,0 +1,90 @@
+name: "[COPY] thirdparty → mshell-modules/thirdparty"
+
+# redpill-dual-drm-backports/thirdparty/ 의 .ko 를
+# mshell-modules/thirdparty/ 로 복사.
+#
+# 플랫폼별 커널 빌트인 제외:
+#   apollolake / geminilake: intel-gtt.ko, interval_tree.ko (커널 빌트인 — OOT 불필요)
+#   그 외 플랫폼: 제외 없음
+
+on:
+  workflow_dispatch:
+  # step6 완료 후 수동 트리거
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout redpill-dual-drm-backports (source)
+        uses: actions/checkout@v4
+        with:
+          path: src
+          fetch-depth: 1
+
+      - name: Checkout mshell-modules (target)
+        uses: actions/checkout@v4
+        with:
+          repository: PeterSuh-Q3/mshell-modules
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: dst
+          fetch-depth: 1
+
+      - name: Copy .ko files with platform-specific exclusions
+        run: |
+          # apollolake/geminilake에서 제외할 모듈 (커널 빌트인)
+          ATOM_EXCLUDE="intel-gtt.ko interval_tree.ko"
+
+          total=0
+          for src_dir in src/thirdparty/*/; do
+            entry=$(basename "$src_dir")
+            # 4.4.302 플랫폼만 처리
+            [[ "$entry" == *"-4.4.302" ]] || continue
+
+            platform=$(echo "$entry" | sed 's/-[0-9]\.[0-9]*-4\.4\.302$//')
+            dst_dir="dst/thirdparty/${entry}"
+            mkdir -p "$dst_dir"
+
+            copied=0
+            for ko in "$src_dir"*.ko; do
+              [ -f "$ko" ] || continue
+              fname=$(basename "$ko")
+
+              # apollolake / geminilake: 빌트인 모듈 제외
+              if [[ "$platform" == "apollolake" || "$platform" == "geminilake" ]]; then
+                skip=false
+                for excl in $ATOM_EXCLUDE; do
+                  [ "$fname" = "$excl" ] && skip=true && break
+                done
+                if $skip; then
+                  echo "  [skip builtin] ${entry}/${fname}"
+                  continue
+                fi
+              fi
+
+              cp -f "$ko" "$dst_dir/"
+              echo "  [copy] ${entry}/${fname}"
+              copied=$((copied+1))
+            done
+            echo "[${entry}] ${copied}개 복사"
+            total=$((total+copied))
+          done
+          echo ""
+          echo "총 ${total}개 .ko 복사 완료"
+
+      - name: Commit and push to mshell-modules
+        run: |
+          cd dst
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add thirdparty/
+          git commit -m "chore: redpill-dual-drm-backports thirdparty .ko 동기화 [skip ci]" || \
+            echo "[skip] 변경사항 없음"
+
+          for i in 1 2 3; do
+            git push && break
+            echo "[retry $i] pull --rebase..."
+            git pull --rebase && git push && break
+            sleep 5
+          done
+          echo "✅ mshell-modules/thirdparty 업데이트 완료"
