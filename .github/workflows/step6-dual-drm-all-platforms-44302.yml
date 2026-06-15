@@ -131,16 +131,14 @@ jobs:
           grep "WARNING:.*undefined" /tmp/build.log || echo "(없음)"
           echo "#################################################"
 
-      - name: "Push .ko to module-output branch"
+      - name: "Commit .ko to main branch thirdparty/"
         run: |
           DEST="thirdparty/${{ matrix.platform }}-${{ matrix.version }}-4.4.302"
-          BR="module-output"
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git fetch origin "${BR}" 2>/dev/null && \
-            git checkout "${BR}" || \
-            { git checkout --orphan "${BR}" && git rm -rf . >/dev/null 2>&1 || true; }
+          git fetch origin main
+          git checkout main
 
           mkdir -p "${DEST}"
           find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} "${DEST}/" \;
@@ -151,12 +149,12 @@ jobs:
             echo "[skip] no changes"
 
           for i in 1 2 3; do
-            git push origin "${BR}" && break
+            git push origin main && break
             echo "[retry $i] pull --rebase and retry..."
-            git pull --rebase origin "${BR}" && git push origin "${BR}" && break
+            git pull --rebase origin main && git push origin main && break
             sleep 5
           done
-          echo "[PUSHED] origin ${BR}/${DEST} ($(ls ${DEST}/*.ko 2>/dev/null | wc -l) ko)"
+          echo "[PUSHED] main/${DEST} ($(ls ${DEST}/*.ko 2>/dev/null | wc -l) ko)"
 
       - name: "[VERIFY] host 중복 export 점검"
         if: always()
