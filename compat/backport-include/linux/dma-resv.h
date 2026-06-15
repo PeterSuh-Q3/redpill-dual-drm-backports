@@ -18,7 +18,16 @@
 #define dma_resv_assert_held     reservation_object_assert_held
 #define dma_resv_get_excl        reservation_object_get_excl
 #define dma_resv_get_list        reservation_object_get_list
-#define dma_resv_add_excl_fence  reservation_object_add_excl_fence
+/* 4.4.302 backport: signal old excl fence before replacing to drain cb_list,
+ * preventing dma_fence_release WARN flood on QuickSync workloads. */
+static inline void dma_resv_add_excl_fence(struct reservation_object *obj,
+					    struct dma_fence *fence)
+{
+	struct dma_fence *old = reservation_object_get_excl(obj);
+	if (old)
+		dma_fence_signal(old);
+	reservation_object_add_excl_fence(obj, fence);
+}
 #define dma_resv_add_shared_fence reservation_object_add_shared_fence
 #define dma_resv_get_fences_rcu  reservation_object_get_fences_rcu
 #define dma_resv_wait_timeout_rcu reservation_object_wait_timeout_rcu
