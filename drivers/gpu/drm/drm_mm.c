@@ -208,8 +208,9 @@ static void drm_mm_interval_tree_add_node(struct drm_mm_node *hole_node,
 	}
 
 	rb_link_node(&node->rb, rb, link);
-	rb_insert_augmented_cached(&node->rb, &mm->interval_tree, leftmost,
-				   &drm_mm_interval_tree_augment);
+	/* backport: rb_insert_augmented_cached → color + manual propagate */
+	rb_insert_color_cached(&node->rb, &mm->interval_tree, leftmost);
+	drm_mm_interval_tree__it_propagate(rb_parent(&node->rb), NULL);
 }
 
 #define RB_INSERT(root, member, expr) do { \
