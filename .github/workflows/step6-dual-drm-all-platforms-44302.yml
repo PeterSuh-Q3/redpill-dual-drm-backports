@@ -176,23 +176,20 @@ jobs:
   verify:
     needs: [build]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
     steps:
-      - name: Checkout main
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: "전 플랫폼 thirdparty .ko 존재 검증"
+      - name: "전 플랫폼 thirdparty .ko 존재 검증 (GitHub API)"
         run: |
           PLATFORMS="geminilake apollolake broadwellnk broadwell broadwellnkv2 broadwellntbap denverton purley r1000 v1000"
           VERSIONS="7.2 7.3"
+          REPO="PeterSuh-Q3/redpill-dual-drm-backports"
 
           missing=()
           for platform in $PLATFORMS; do
             for version in $VERSIONS; do
               dir="thirdparty/${platform}-${version}-4.4.302"
-              ko_count=$(ls "${dir}"/*.ko 2>/dev/null | wc -l)
+              ko_count=$(gh api "repos/${REPO}/contents/${dir}" --jq '[.[] | select(.name | endswith(".ko"))] | length' 2>/dev/null || echo 0)
               if [ "$ko_count" -gt 0 ]; then
                 echo "  [OK] ${dir} — ${ko_count}개 ko"
               else
@@ -216,5 +213,3 @@ jobs:
           gh workflow run copy-thirdparty-to-mshell.yml \
             --repo PeterSuh-Q3/redpill-dual-drm-backports
           echo "✅ copy-thirdparty-to-mshell 트리거 완료"
-        env:
-          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
