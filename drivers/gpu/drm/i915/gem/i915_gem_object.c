@@ -22,6 +22,7 @@
  *
  */
 
+#include <linux/reservation.h>
 #include "display/intel_frontbuffer.h"
 #include "gt/intel_gt.h"
 #include "i915_drv.h"
@@ -139,8 +140,22 @@ static void __i915_gem_free_object_rcu(struct rcu_head *head)
 	struct drm_i915_gem_object *obj =
 		container_of(head, typeof(*obj), rcu);
 	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct reservation_object *resv = &obj->base._resv;
+	struct reservation_object_list *flist;
+	struct dma_fence *excl;
+	unsigned int i;
 
-	dma_resv_fini(&obj->base._resv);
+	/* 4.4.302 backport: signal all pending fences to drain cb_list
+	 * before fini, preventing dma_fence_release WARN_ON(!list_empty). */
+	excl = reservation_object_get_excl(resv);
+	if (excl)
+		dma_fence_signal(excl);
+	flist = reservation_object_get_list(resv);
+	if (flist) {
+		for (i = 0; i < flist->shared_count; i++)
+			dma_fence_signal(flist->shared[i]);
+	}
+	reservation_object_fini(resv);
 	i915_gem_object_free(obj);
 
 	GEM_BUG_ON(!atomic_read(&i915->mm.free_count));
