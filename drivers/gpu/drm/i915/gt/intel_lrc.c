@@ -646,6 +646,9 @@ execlists_schedule_out(struct i915_request *rq)
 	if (!cur)
 		__execlists_schedule_out(rq, old);
 
+	/* 4.4.302 backport: signal fence before put to drain cb_list,
+	 * preventing dma_fence_release WARN from IRQ/softirq context. */
+	dma_fence_signal(&rq->fence);
 	i915_request_put(rq);
 }
 
