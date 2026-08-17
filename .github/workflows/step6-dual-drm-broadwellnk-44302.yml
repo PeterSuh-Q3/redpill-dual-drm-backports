@@ -77,6 +77,7 @@ jobs:
             CONFIG_DRM_TTM=m CONFIG_DRM_SCHED=m \
             CONFIG_DRM_AMDGPU=m \
             CONFIG_AGP_INTEL=m \
+            CONFIG_DRM_PANEL_ORIENTATION_QUIRKS=m \
             KCPPFLAGS="$OOT_KCPPFLAGS" \
             modules 2>&1 | tee /tmp/build.log || true
 
