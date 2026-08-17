@@ -114,7 +114,9 @@ jobs:
           case "${{ matrix.platform }}" in
             geminilake|apollolake)
               EXTRA_CONFIG="CONFIG_DRM_SYNC_FILE_IN_KERNEL=y CONFIG_INTERVAL_TREE_IN_KERNEL=y CONFIG_DRM_HDMI_IN_KERNEL=y"
-              NOHOST_CONFIG="" ;;
+              NOHOST_CONFIG=""
+              OOT_KCPPFLAGS="$OOT_KCPPFLAGS -DCONFIG_DRM_HDMI_IN_KERNEL"
+              ;;
           esac
 
           make -C "$KLIB_BUILD" M="$OOT_ROOT" \

@@ -34,6 +34,7 @@
 
 #include <linux/types.h>
 #include <linux/device.h>
+#include <linux/string.h>
 
 enum hdmi_packet_type {
 	HDMI_PACKET_TYPE_NULL = 0x00,
@@ -221,12 +222,44 @@ ssize_t hdmi_avi_infoframe_pack(struct hdmi_avi_infoframe *frame, void *buffer,
 ssize_t hdmi_avi_infoframe_pack_only(const struct hdmi_avi_infoframe *frame,
 				     void *buffer, size_t size);
 int hdmi_avi_infoframe_check(struct hdmi_avi_infoframe *frame);
+
+/* ★ 2026-08-17: geminilake/apollolake host 는 hdmi_avi/audio/vendor_infoframe_init
+ * 은 빌트인 제공하지만 hdmi_drm_infoframe_init(HDR, 더 신형 기능)만 없음(부분결손,
+ * 실기 /proc/kallsyms 확인) — CONFIG_DRM_HDMI_IN_KERNEL 빌드(drivers/video/hdmi.c
+ * 미컴파일)에서는 이 3개 함수만 no-op 스텁으로 대체. 8개 host-미제공 플랫폼은
+ * 우리 hdmi.c 가 실제로 구현/export 하므로 원래 extern 선언 유지. */
+#ifdef CONFIG_DRM_HDMI_IN_KERNEL
+static inline int hdmi_drm_infoframe_init(struct hdmi_drm_infoframe *frame)
+{
+	memset(frame, 0, sizeof(*frame));
+	frame->type = HDMI_INFOFRAME_TYPE_DRM;
+	frame->version = 1;
+	frame->length = 26;
+	return 0;
+}
+static inline ssize_t hdmi_drm_infoframe_pack(struct hdmi_drm_infoframe *frame,
+					      void *buffer, size_t size)
+{
+	return 0;
+}
+static inline ssize_t
+hdmi_drm_infoframe_pack_only(const struct hdmi_drm_infoframe *frame,
+			     void *buffer, size_t size)
+{
+	return 0;
+}
+static inline int hdmi_drm_infoframe_check(struct hdmi_drm_infoframe *frame)
+{
+	return 0;
+}
+#else
 int hdmi_drm_infoframe_init(struct hdmi_drm_infoframe *frame);
 ssize_t hdmi_drm_infoframe_pack(struct hdmi_drm_infoframe *frame, void *buffer,
 				size_t size);
 ssize_t hdmi_drm_infoframe_pack_only(const struct hdmi_drm_infoframe *frame,
 				     void *buffer, size_t size);
 int hdmi_drm_infoframe_check(struct hdmi_drm_infoframe *frame);
+#endif
 
 enum hdmi_spd_sdi {
 	HDMI_SPD_SDI_UNKNOWN,
