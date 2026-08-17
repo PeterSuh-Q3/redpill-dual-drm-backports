@@ -249,8 +249,10 @@ static struct sync_file *sync_file_merge(const char *name, struct sync_file *a,
 
 			i_b++;
 		} else {
-			if (__dma_fence_is_later(pt_a->seqno, pt_b->seqno,
-						 pt_a->ops))
+			/* host linux/dma-fence.h(4.4.302 백포트, 7.3/7.4 동일)는
+			 * __dma_fence_is_later(u32,u32) 2-인자 구버전(~5.0 이전) —
+			 * ops 기반 wraparound 인자 미지원이라 드롭. */
+			if (__dma_fence_is_later(pt_a->seqno, pt_b->seqno))
 				add_fence(fences, &i, pt_a);
 			else
 				add_fence(fences, &i, pt_b);
@@ -390,7 +392,7 @@ static int sync_fill_fence_info(struct dma_fence *fence,
 	info->timestamp_ns =
 		test_bit(DMA_FENCE_FLAG_TIMESTAMP_BIT, &fence->flags) ?
 		ktime_to_ns(fence->timestamp) :
-		ktime_set(0, 0);
+		0; /* ktime_set(0,0)과 동일 값이나 host union ktime_t 캐스트 불일치 회피 */
 
 	return info->status;
 }
