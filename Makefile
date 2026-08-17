@@ -41,6 +41,13 @@ ifneq ($(CONFIG_INTERVAL_TREE_IN_KERNEL),y)
 obj-m += interval_tree.o
 interval_tree-y := compat/interval_tree.o
 endif
+
+# backlight.ko: DSM 4.4.302 전 플랫폼(geminilake/apollolake 포함) 공통 CONFIG_BACKLIGHT_
+# CLASS_DEVICE=m(host 빌트인 아님, .config 전수확인) — 항상 우리가 생산, 가드 불필요.
+# module_init/exit(postcore_initcall+module_exit)이 있는 정식 독립 모듈이라
+# sync_file/hdmi 처럼 drm.ko 에 fold하지 않고 interval_tree 와 동일하게 standalone .ko로 링크.
+obj-m += backlight.o
+backlight-y := drivers/video/backlight/backlight.o
 # drm_compat.h 를 전 컴파일에 force-include (OOT 하위 디렉토리 전파용).
 # (최상위 ccflags-y 는 drivers/gpu/drm/* 로 전파되지 않으므로 KCPPFLAGS 사용)
 COMPAT_CPPFLAGS := -I$(PWD)/compat -I$(PWD)/include -include $(PWD)/compat/drm_compat.h
