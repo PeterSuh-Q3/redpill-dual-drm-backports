@@ -120,6 +120,12 @@ jobs:
               ;;
           esac
 
+          # ★ 2026-08-17 broadwellnk-7.4 실기(.162) 검증: 이 워크플로우는 전 플랫폼이
+          # 항상 DSM 7.4 이며, 7.4 커널은 플랫폼 불문 fb_register_client 등을 커널
+          # 자체(vmlinux)에 빌트인 export("owned by kernel") — 7.2/7.3 에는 없던 차이.
+          # 전 플랫폼에 CONFIG_FB_NOTIFY_IN_KERNEL=y 적용(중복 지정돼도 무해).
+          EXTRA_CONFIG="$EXTRA_CONFIG CONFIG_FB_NOTIFY_IN_KERNEL=y"
+
           make -C "$KLIB_BUILD" M="$OOT_ROOT" \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m \
             CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \

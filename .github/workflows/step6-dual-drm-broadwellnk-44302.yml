@@ -90,6 +90,15 @@ jobs:
               ;;
           esac
 
+          # ★ 2026-08-17 broadwellnk-7.4 실기(.162) 검증: DSM 7.4 커널은 플랫폼 불문
+          # fb_register_client 등 fb_notify 심볼을 커널 자체(vmlinux)에 빌트인 export
+          # ("owned by kernel", geminilake/apollolake 전용이 아님 — 7.2/7.3 에는 없던
+          # DSM 7.4 커널 전반의 차이). 우리가 또 만들면 fb.ko가 "invalid module format"
+          # 으로 적재 불가하므로 버전 기준으로 별도 가드.
+          if [ "${{ matrix.version }}" = "7.4" ]; then
+            EXTRA_CONFIG="$EXTRA_CONFIG CONFIG_FB_NOTIFY_IN_KERNEL=y"
+          fi
+
           make -C "$KLIB_BUILD" M="$OOT_ROOT" \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m \
             CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
