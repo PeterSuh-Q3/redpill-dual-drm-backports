@@ -111,32 +111,22 @@ jobs:
           grep "WARNING:.*undefined" /tmp/build.log || echo "(없음)"
           echo "#################################################"
 
-      - name: "Push .ko to module-output branch"
+      - name: "Stage .ko for artifact upload"
         run: |
-          DEST="thirdparty/${{ matrix.platform }}-${{ matrix.version }}-4.4.302"
-          BR="module-output"
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p artifact-out
+          find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} artifact-out/ \;
+          find "$GITHUB_WORKSPACE/drivers/char/agp" -name "*.ko" -exec cp -f {} artifact-out/ \;
+          find "$GITHUB_WORKSPACE" -maxdepth 1 -name "*.ko" -exec cp -f {} artifact-out/ \;
+          echo "=== artifact-out 내용 ==="
+          ls -la artifact-out/
 
-          git fetch origin "${BR}" 2>/dev/null && \
-            git checkout "${BR}" || \
-            { git checkout --orphan "${BR}" && git rm -rf . >/dev/null 2>&1 || true; }
-
-          rm -rf "${DEST}"
-          mkdir -p "${DEST}"
-          find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} "${DEST}/" \;
-          find "$GITHUB_WORKSPACE/drivers/char/agp" -name "*.ko" -exec cp -f {} "${DEST}/" \;
-          find "$GITHUB_WORKSPACE" -maxdepth 1 -name "*.ko" -exec cp -f {} "${DEST}/" \;
-          git add "${DEST}"
-          git commit -m "build output ${{ matrix.platform }}-${{ matrix.version }}-4.4.302 dual-drm (i915+amdgpu) [skip ci]" || \
-            echo "[skip] no changes"
-
-          for i in $(seq 1 20); do
-            git push origin "${BR}" && { echo "[PUSHED] ${BR}/${DEST} ($(ls ${DEST}/*.ko 2>/dev/null | wc -l) ko)"; break; }
-            echo "[retry $i] pull --rebase..."
-            sleep $((RANDOM % 8 + 2))
-            git pull --rebase origin "${BR}" || true
-          done
+      - name: "Upload artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: modules-${{ matrix.platform }}-${{ matrix.version }}
+          path: artifact-out/*.ko
+          if-no-files-found: error
+          retention-days: 1
 
       - name: "[VERIFY] host 중복 export 점검"
         if: always()
@@ -166,3 +156,48 @@ jobs:
           done
 
           grep "WARNING:.*undefined" /tmp/build.log || echo "(MODPOST WARNING 없음)"
+
+  push:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout module-output branch
+        uses: actions/checkout@v4
+        with:
+          ref: module-output
+          fetch-depth: 1
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded
+          pattern: modules-*
+
+      - name: "Merge into thirdparty/ and commit (single writer, no race)"
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          total=0
+          for d in downloaded/modules-*/; do
+            [ -d "$d" ] || continue
+            name=$(basename "$d")
+            rest="${name#modules-}"
+            version="${rest##*-}"
+            platform="${rest%-*}"
+            DEST="thirdparty/${platform}-${version}-4.4.302"
+
+            rm -rf "$DEST"
+            mkdir -p "$DEST"
+            cp -f "$d"*.ko "$DEST/" 2>/dev/null || true
+            n=$(ls "$DEST"/*.ko 2>/dev/null | wc -l)
+            echo "[${DEST}] ${n}개"
+            total=$((total+n))
+            git add "$DEST"
+          done
+          echo "총 ${total}개 .ko 반영"
+
+          git commit -m "build output broadwellnk-pilot dual-drm (i915+amdgpu) [skip ci]" || \
+            echo "[skip] no changes"
+          git push origin module-output
