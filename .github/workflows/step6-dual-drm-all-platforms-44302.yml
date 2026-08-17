@@ -105,13 +105,16 @@ jobs:
             -include $OOT_ROOT/compat/drm_compat.h \
             -include $OOT_ROOT/compat/kcl_compat.h"
 
-          # geminilake/apollolake host 는 hdmi/drm_mipi_dsi/sync_file 이 이미 빌트인(=y) —
-          # 우리 drm.ko 가 또 만들면 심볼 중복 export 충돌. IN_KERNEL 가드로 이 두
-          # 플랫폼만 자체 sync_file 생산을 스킵(host 위임).
+          # geminilake/apollolake host 는 hdmi/drm_mipi_dsi/sync_file/interval_tree/
+          # intel_gtt 가 이미 빌트인(실기 /proc/kallsyms 확인) — 우리가 또 만들면
+          # "invalid module format"(심볼 중복)으로 insmod 자체가 실패.
+          # IN_KERNEL 가드로 스킵(host 위임), intel-gtt(AGP_INTEL)는 아예 빌드 안 함.
           EXTRA_CONFIG=""
+          AGP_CONFIG="CONFIG_AGP_INTEL=m"
           case "${{ matrix.platform }}" in
             geminilake|apollolake)
-              EXTRA_CONFIG="CONFIG_DRM_SYNC_FILE_IN_KERNEL=y" ;;
+              EXTRA_CONFIG="CONFIG_DRM_SYNC_FILE_IN_KERNEL=y CONFIG_INTERVAL_TREE_IN_KERNEL=y"
+              AGP_CONFIG="" ;;
           esac
 
           make -C "$KLIB_BUILD" M="$OOT_ROOT" \
@@ -119,7 +122,7 @@ jobs:
             CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
             CONFIG_DRM_TTM=m CONFIG_DRM_SCHED=m \
             CONFIG_DRM_AMDGPU=m \
-            CONFIG_AGP_INTEL=m \
+            $AGP_CONFIG \
             CONFIG_DRM_PANEL_ORIENTATION_QUIRKS=m \
             $EXTRA_CONFIG \
             KCPPFLAGS="$OOT_KCPPFLAGS" \

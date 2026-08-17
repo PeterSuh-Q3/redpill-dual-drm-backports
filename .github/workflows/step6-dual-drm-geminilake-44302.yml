@@ -74,14 +74,16 @@ jobs:
             -include $OOT_ROOT/compat/drm_compat.h \
             -include $OOT_ROOT/compat/kcl_compat.h"
 
-          # host 가 hdmi/drm_mipi_dsi/sync_file 을 이미 빌트인(=y) 제공 —
-          # 우리 drm.ko 가 또 만들면 심볼 중복 export 충돌하므로 IN_KERNEL 가드로 스킵.
+          # host 가 hdmi/drm_mipi_dsi/sync_file/interval_tree 를 이미 빌트인(=y) 제공 —
+          # 우리가 또 만들면 심볼 중복("invalid module format")으로 insmod 실패하므로
+          # IN_KERNEL 가드로 스킵(intel-gtt 도 이 워크플로우는 원래 안 빌드).
           make -C "$KLIB_BUILD" M="$OOT_ROOT" \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m \
             CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
             CONFIG_DRM_TTM=m CONFIG_DRM_SCHED=m \
             CONFIG_DRM_AMDGPU=m \
             CONFIG_DRM_SYNC_FILE_IN_KERNEL=y \
+            CONFIG_INTERVAL_TREE_IN_KERNEL=y \
             KCPPFLAGS="$OOT_KCPPFLAGS" \
             modules 2>&1 | tee /tmp/build.log || true
 

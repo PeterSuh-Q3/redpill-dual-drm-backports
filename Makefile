@@ -34,8 +34,13 @@ obj-$(CONFIG_AGP_INTEL) += drivers/char/agp/
 # ── compat shim ──
 # interval_tree.ko: 최상위에서 obj-m으로 선언해야 독립 .ko로 링크됨
 # (obj-y 하위 디렉토리의 obj-m은 OOT M= 빌드에서 standalone .ko 미생성)
+# geminilake/apollolake host 는 interval_tree_insert 등을 이미 빌트인 export
+# (실기 확인: /proc/kallsyms) — 우리가 또 만들면 "invalid module format"으로
+# insmod 자체가 실패(심볼 중복). CONFIG_INTERVAL_TREE_IN_KERNEL=y 로 스킵.
+ifneq ($(CONFIG_INTERVAL_TREE_IN_KERNEL),y)
 obj-m += interval_tree.o
 interval_tree-y := compat/interval_tree.o
+endif
 # drm_compat.h 를 전 컴파일에 force-include (OOT 하위 디렉토리 전파용).
 # (최상위 ccflags-y 는 drivers/gpu/drm/* 로 전파되지 않으므로 KCPPFLAGS 사용)
 COMPAT_CPPFLAGS := -I$(PWD)/compat -I$(PWD)/include -include $(PWD)/compat/drm_compat.h
