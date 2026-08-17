@@ -18,8 +18,16 @@ drm-y       :=	drm_auth.o drm_cache.o \
 		drm_dumb_buffers.o drm_mode_config.o drm_vblank.o \
 		drm_syncobj.o drm_lease.o drm_writeback.o drm_client.o \
 		drm_client_modeset.o drm_atomic_uapi.o drm_hdcp.o \
-		../../../compat/dma-fence-chain.o \
-		../../dma-buf/sync_file.o
+		../../../compat/dma-fence-chain.o
+
+# sync_file: DSM 4.4.302 stock 커널 대다수(broadwellnk 등)는 CONFIG_SYNC_FILE=n 이라
+# host 에 sync_file_create/get_fence 가 없어 우리 drm.ko 가 자체 제공해야 하지만,
+# geminilake/apollolake host 는 CONFIG_SYNC_FILE=y(빌트인) 라 우리가 또 만들면
+# 심볼 중복 export 충돌 — CONFIG_DRM_SYNC_FILE_IN_KERNEL=y 로 이 두 플랫폼만 제외
+# (interval_tree/amdgpu 가드와 동일 패턴).
+ifneq ($(CONFIG_DRM_SYNC_FILE_IN_KERNEL),y)
+drm-y += ../../dma-buf/sync_file.o
+endif
 
 drm-$(CONFIG_DRM_LEGACY) += drm_legacy_misc.o drm_bufs.o drm_context.o drm_dma.o drm_scatter.o drm_lock.o
 drm-$(CONFIG_DRM_LIB_RANDOM) += lib/drm_random.o

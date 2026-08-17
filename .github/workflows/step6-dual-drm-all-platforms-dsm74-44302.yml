@@ -102,6 +102,15 @@ jobs:
             -include $OOT_ROOT/compat/drm_compat.h \
             -include $OOT_ROOT/compat/kcl_compat.h"
 
+          # geminilake/apollolake host 는 hdmi/drm_mipi_dsi/sync_file 이 이미 빌트인(=y) —
+          # 우리 drm.ko 가 또 만들면 심볼 중복 export 충돌. IN_KERNEL 가드로 이 두
+          # 플랫폼만 자체 sync_file 생산을 스킵(host 위임).
+          EXTRA_CONFIG=""
+          case "${{ matrix.platform }}" in
+            geminilake|apollolake)
+              EXTRA_CONFIG="CONFIG_DRM_SYNC_FILE_IN_KERNEL=y" ;;
+          esac
+
           make -C "$KLIB_BUILD" M="$OOT_ROOT" \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m \
             CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
@@ -109,6 +118,7 @@ jobs:
             CONFIG_DRM_AMDGPU=m \
             CONFIG_AGP_INTEL=m \
             CONFIG_DRM_PANEL_ORIENTATION_QUIRKS=m \
+            $EXTRA_CONFIG \
             KCPPFLAGS="$OOT_KCPPFLAGS" \
             modules 2>&1 | tee /tmp/build.log || true
 
