@@ -48,6 +48,30 @@ endif
 # sync_file/hdmi 처럼 drm.ko 에 fold하지 않고 interval_tree 와 동일하게 standalone .ko로 링크.
 obj-m += backlight.o
 backlight-y := drivers/video/backlight/backlight.o
+
+# fbdev core: drm_kms_helper 의 fbdev 에뮬레이션 경로가 fb 서브시스템 심볼
+# (register_framebuffer/cfb_*/sys_*/fb_alloc_cmap 등)을 무조건 참조 —
+# apollolake 실기에서 drm_kms_helper.ko insmod 시 확인(broadwellnk 는 불필요,
+# 플랫폼별로 fbdev 에뮬레이션 코드경로 포함 여부가 다름 — 안전하게 전 플랫폼
+# 공통 생산). fb.ko(fbmem+fbcmap+fb_defio)에 fb_is_primary_device 자체구현
+# 포함(DSM host fb.ko 가 export 안 해 apollolake/geminilake 에서 미로드되던
+# 고질 문제 — i915_interval_tree_guard 메모리 선례와 동일 원인).
+obj-m += fb.o
+fb-y := drivers/video/fbdev/core/fbmem.o \
+        drivers/video/fbdev/core/fbcmap.o \
+        drivers/video/fbdev/core/fb_defio.o
+
+obj-m += cfbfillrect.o cfbcopyarea.o cfbimgblt.o
+cfbfillrect-y := drivers/video/fbdev/core/cfbfillrect.o
+cfbcopyarea-y := drivers/video/fbdev/core/cfbcopyarea.o
+cfbimgblt-y := drivers/video/fbdev/core/cfbimgblt.o
+
+obj-m += syscopyarea.o sysfillrect.o sysimgblt.o fb_sys_fops.o
+syscopyarea-y := drivers/video/fbdev/core/syscopyarea.o
+sysfillrect-y := drivers/video/fbdev/core/sysfillrect.o
+sysimgblt-y := drivers/video/fbdev/core/sysimgblt.o
+fb_sys_fops-y := drivers/video/fbdev/core/fb_sys_fops.o
+
 # drm_compat.h 를 전 컴파일에 force-include (OOT 하위 디렉토리 전파용).
 # (최상위 ccflags-y 는 drivers/gpu/drm/* 로 전파되지 않으므로 KCPPFLAGS 사용)
 COMPAT_CPPFLAGS := -I$(PWD)/compat -I$(PWD)/include -include $(PWD)/compat/drm_compat.h
