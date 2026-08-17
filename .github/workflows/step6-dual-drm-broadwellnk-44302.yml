@@ -82,7 +82,7 @@ jobs:
           NOHOST_CONFIG="CONFIG_AGP_INTEL=m CONFIG_DRM_MIPI_DSI=m"
           case "${{ matrix.platform }}" in
             geminilake|apollolake)
-              EXTRA_CONFIG="CONFIG_DRM_SYNC_FILE_IN_KERNEL=y CONFIG_INTERVAL_TREE_IN_KERNEL=y CONFIG_DRM_HDMI_IN_KERNEL=y"
+              EXTRA_CONFIG="CONFIG_DRM_SYNC_FILE_IN_KERNEL=y CONFIG_INTERVAL_TREE_IN_KERNEL=y CONFIG_DRM_HDMI_IN_KERNEL=y CONFIG_FB_NOTIFY_IN_KERNEL=y"
               NOHOST_CONFIG=""
               # host가 hdmi_drm_infoframe_init(HDR)만 부분결손(실기 확인) — C 매크로로도 전달해
               # hdmi.h 가 이 함수들만 no-op 스텁으로 대체하도록 함

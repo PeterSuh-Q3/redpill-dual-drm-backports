@@ -62,8 +62,16 @@ fb-y := drivers/video/fbdev/core/fbmem.o \
         drivers/video/fbdev/core/fb_defio.o \
         drivers/video/fbdev/core/fbsysfs.o \
         drivers/video/fbdev/core/modedb.o \
-        drivers/video/fbdev/core/fbcvt.o \
-        drivers/video/fbdev/core/fb_notify.o
+        drivers/video/fbdev/core/fbcvt.o
+
+# fb_notify: apollolake host 는 fb_register_client 등을 이미 커널 빌트인으로
+# export("owned by kernel", 실기 확인) — 우리가 또 만들면 fb.ko 자체가
+# "invalid module format"으로 적재 불가. CONFIG_FB_NOTIFY_IN_KERNEL=y 로 스킵
+# (geminilake/apollolake). C 매크로 -DCONFIG_FB_NOTIFY 는 계속 유지해 fb.h 가
+# extern 선언 분기를 타도록 함(호스트 실제 구현과 시그니처만 맞추면 됨).
+ifneq ($(CONFIG_FB_NOTIFY_IN_KERNEL),y)
+fb-y += drivers/video/fbdev/core/fb_notify.o
+endif
 
 obj-m += cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 cfbfillrect-y := drivers/video/fbdev/core/cfbfillrect.o
