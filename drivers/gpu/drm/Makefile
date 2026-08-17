@@ -29,6 +29,15 @@ ifneq ($(CONFIG_DRM_SYNC_FILE_IN_KERNEL),y)
 drm-y += ../../dma-buf/sync_file.o
 endif
 
+# hdmi: drm_edid.c 가 hdmi_avi_infoframe_init/hdmi_vendor_infoframe_init 를
+# 무조건 호출하는데, DSM 4.4.302 stock 커널 대다수(broadwellnk 등)는
+# CONFIG_HDMI=n 이라 host 에 없음(실기 확인) — sync_file 과 동일 패턴으로
+# 우리가 직접 제공. geminilake/apollolake host 는 CONFIG_HDMI=y(빌트인) 라
+# CONFIG_DRM_HDMI_IN_KERNEL=y 로 제외.
+ifneq ($(CONFIG_DRM_HDMI_IN_KERNEL),y)
+drm-y += ../../video/hdmi.o
+endif
+
 drm-$(CONFIG_DRM_LEGACY) += drm_legacy_misc.o drm_bufs.o drm_context.o drm_dma.o drm_scatter.o drm_lock.o
 drm-$(CONFIG_DRM_LIB_RANDOM) += lib/drm_random.o
 drm-$(CONFIG_DRM_VM) += drm_vm.o

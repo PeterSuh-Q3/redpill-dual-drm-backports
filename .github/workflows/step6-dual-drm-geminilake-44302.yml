@@ -84,6 +84,7 @@ jobs:
             CONFIG_DRM_AMDGPU=m \
             CONFIG_DRM_SYNC_FILE_IN_KERNEL=y \
             CONFIG_INTERVAL_TREE_IN_KERNEL=y \
+            CONFIG_DRM_HDMI_IN_KERNEL=y \
             KCPPFLAGS="$OOT_KCPPFLAGS" \
             modules 2>&1 | tee /tmp/build.log || true
 
