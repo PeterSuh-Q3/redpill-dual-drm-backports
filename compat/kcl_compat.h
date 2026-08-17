@@ -511,4 +511,46 @@ bus_find_device_by_of_node(struct bus_type *bus, const struct device_node *np)
 }
 #endif
 
+/* --- pci: pci_info/pci_warn (~4.16+) — fbmem.c 필요, host 미제공 --- */
+#include <linux/pci.h>
+#ifndef pci_info
+#define pci_info(pdev, fmt, arg...) dev_info(&(pdev)->dev, fmt, ##arg)
+#endif
+#ifndef pci_warn
+#define pci_warn(pdev, fmt, arg...) dev_warn(&(pdev)->dev, fmt, ##arg)
+#endif
+
+/* --- proc: proc_create_seq (~4.18+) — fbmem.c(/proc/fb) 필요, host 는 구형
+ * proc_create + seq_open 조합만 제공. file_operations 래퍼로 흉내. */
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+#ifndef proc_create_seq
+static inline int _mshell_proc_seq_open(struct inode *inode, struct file *file)
+{
+	return seq_open(file, (const struct seq_operations *)PDE_DATA(inode));
+}
+static inline struct proc_dir_entry *
+_mshell_proc_create_seq(const char *name, umode_t mode,
+			struct proc_dir_entry *parent,
+			const struct seq_operations *ops)
+{
+	static struct file_operations fops;
+	fops.owner = THIS_MODULE;
+	fops.open = _mshell_proc_seq_open;
+	fops.read = seq_read;
+	fops.llseek = seq_lseek;
+	fops.release = seq_release;
+	return proc_create_data(name, mode, parent, &fops, (void *)ops);
+}
+#define proc_create_seq(name, mode, parent, ops) \
+	_mshell_proc_create_seq(name, mode, parent, ops)
+#endif
+
+/* --- console: ignore_console_lock_warning (~4.15+) — fbmem.c 필요, host 미제공.
+ * 단순 경고억제용 카운터라 TU-local static 정의로 충분(전역 공유 불필요). */
+#include <linux/console.h>
+#ifndef ignore_console_lock_warning
+static atomic_t ignore_console_lock_warning = ATOMIC_INIT(0);
+#endif
+
 #endif /* _MSHELL_KCL_COMPAT_H */
