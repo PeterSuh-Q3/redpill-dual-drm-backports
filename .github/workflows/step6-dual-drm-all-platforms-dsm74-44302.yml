@@ -155,6 +155,7 @@ jobs:
             git checkout "${BR}" || \
             { git checkout --orphan "${BR}" && git rm -rf . >/dev/null 2>&1 || true; }
 
+          rm -rf "${DEST}"
           mkdir -p "${DEST}"
           find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} "${DEST}/" \;
           find "$GITHUB_WORKSPACE/drivers/char/agp" -name "*.ko" -exec cp -f {} "${DEST}/" \;
