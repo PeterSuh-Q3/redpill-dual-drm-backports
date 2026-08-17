@@ -496,4 +496,19 @@ static inline int  mshell_pci_resize_resource(struct pci_dev *dev, int resno, in
 
 /* perf_event_update_userpage: amdgpu_pmu.c 소스에서 직접 패치 (DSM 미export) */
 
+/* --- device: bus_find_device_by_of_node (~4.19+) — drm_mipi_dsi.c 필요 --- */
+#include <linux/device.h>
+#include <linux/of.h>
+#ifndef bus_find_device_by_of_node
+static inline int _mshell_of_node_match(struct device *dev, void *data)
+{
+	return dev->of_node == data;
+}
+static inline struct device *
+bus_find_device_by_of_node(struct bus_type *bus, const struct device_node *np)
+{
+	return bus_find_device(bus, NULL, (void *)np, _mshell_of_node_match);
+}
+#endif
+
 #endif /* _MSHELL_KCL_COMPAT_H */
