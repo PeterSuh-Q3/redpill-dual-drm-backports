@@ -437,7 +437,12 @@ static int i915_kick_out_firmware_fb(struct drm_i915_private *dev_priv)
 	primary =
 		pdev->resource[PCI_ROM_RESOURCE].flags & IORESOURCE_ROM_SHADOW;
 
-	ret = drm_fb_helper_remove_conflicting_framebuffers(ap, "inteldrmfb", primary);
+	/* DSM stock fb.ko(4.4.302, 7.2/7.3/7.4 공통 확인)가 fb_is_primary_device
+	 * 부재로 자체 로드 불가 → host CONFIG_FB 강제활성 시 IS_REACHABLE(CONFIG_FB)
+	 * 경로가 raw kernel remove_conflicting_framebuffers()를 호출해
+	 * i915.ko 자체가 Unknown symbol 로 적재 불가해짐. amdgpu_drv.c 의
+	 * 동일 사례([[amdgpu_split_build]] fb 강제활성 대응)와 같은 방식으로 스킵. */
+	ret = 0;
 
 	kfree(ap);
 
