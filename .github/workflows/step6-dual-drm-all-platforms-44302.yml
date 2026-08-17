@@ -116,11 +116,14 @@ jobs:
           # "invalid module format"(심볼 중복)으로 insmod 자체가 실패.
           # IN_KERNEL 가드로 스킵(host 위임), intel-gtt(AGP_INTEL)/drm_mipi_dsi 는
           # 이 두 플랫폼에서 아예 빌드 안 함(NOHOST_CONFIG 는 host 미제공 8플랫폼 전용).
-          EXTRA_CONFIG=""
+          # ★ 2026-08-17 broadwellnk 7.3(.152)/7.4(.162) 실기 검증: fb_register_client
+          # 등 fb_notify 심볼은 geminilake/apollolake 전용이 아니라 DSM 4.4.302 커널
+          # 전반(플랫폼·버전 불문)에서 vmlinux 자체가 빌트인 export("owned by kernel").
+          EXTRA_CONFIG="CONFIG_FB_NOTIFY_IN_KERNEL=y"
           NOHOST_CONFIG="CONFIG_AGP_INTEL=m CONFIG_DRM_MIPI_DSI=m"
           case "${{ matrix.platform }}" in
             geminilake|apollolake)
-              EXTRA_CONFIG="CONFIG_DRM_SYNC_FILE_IN_KERNEL=y CONFIG_INTERVAL_TREE_IN_KERNEL=y CONFIG_DRM_HDMI_IN_KERNEL=y CONFIG_FB_NOTIFY_IN_KERNEL=y"
+              EXTRA_CONFIG="$EXTRA_CONFIG CONFIG_DRM_SYNC_FILE_IN_KERNEL=y CONFIG_INTERVAL_TREE_IN_KERNEL=y CONFIG_DRM_HDMI_IN_KERNEL=y"
               NOHOST_CONFIG=""
               OOT_KCPPFLAGS="$OOT_KCPPFLAGS -DCONFIG_DRM_HDMI_IN_KERNEL"
               ;;
