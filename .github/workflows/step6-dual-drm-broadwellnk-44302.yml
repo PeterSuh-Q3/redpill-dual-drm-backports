@@ -71,7 +71,7 @@ jobs:
             -I$OOT_ROOT/compat \
             -include $OOT_ROOT/compat/drm_compat.h \
             -include $OOT_ROOT/compat/kcl_compat.h \
-            -DCONFIG_FB_DEFERRED_IO"
+            -DCONFIG_FB_DEFERRED_IO -DCONFIG_FB_NOTIFY"
 
           # apollolake/geminilake host 는 hdmi/drm_mipi_dsi/sync_file/interval_tree/
           # intel_gtt 가 이미 빌트인(실기 /proc/kallsyms 확인) — 우리가 또 만들면
