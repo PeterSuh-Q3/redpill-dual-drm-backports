@@ -77,3 +77,36 @@ compat/
 - 헤드리스: 디스플레이 출력 미사용 → fbdev 에뮬레이션 제거 (§0 이슈 3)
 - device node: 부팅 시 `/dev/dri/card*`, `renderD*` 생성 확인
 - amdgpu VM size 64GB 는 GPU 가상주소 공간으로 정상값 (시스템 RAM 무관)
+
+## DRM 보조 모듈 의존성 매트릭스 (4.4.302 계열)
+
+이 저장소가 빌드하는 `drm.ko`/`amdgpu.ko`/`i915.ko`는 완전히 자기완결적이지 않다.
+`hdmi.ko`, `drm_mipi_dsi.ko`, `backlight.ko` 등 일부 심볼은 **host(DSM stock) 커널이
+빌트인으로 제공하는 플랫폼도 있고, 전무해서 별도 번들이 필요한 플랫폼도 있다** —
+획일적으로 처리하면 심볼 중복(host 빌트인 플랫폼) 또는 Unknown symbol(host 미제공
+플랫폼) 중 하나로 반드시 실패한다.
+
+| 플랫폼 | hdmi.ko | drm_mipi_dsi.ko | sync_file | backlight.ko | drm_panel_orientation_quirks.ko | 검증 상태 |
+|---|---|---|---|---|---|---|
+| geminilake | host 빌트인 — 번들 금지 | host 빌트인 — 번들 금지 | ✅ `drm.ko` 자체 내장 | 레거시 번들(mshell-modules) | ✅ CI 빌드 | ✅ 확정 |
+| apollolake | host 빌트인 — 번들 금지 | host 빌트인 — 번들 금지 | ✅ `drm.ko` 자체 내장 | 레거시 번들(mshell-modules) | ✅ CI 빌드 | ✅ 확정 |
+| **broadwellnk** | **host 없음 — 번들 필요** | **host 없음 — 번들 필요** | ✅ `drm.ko` 자체 내장(2026-08-17 수정) | **host 없음 — 번들 필요**(7.4 자체 `fb.ko`도 결손) | ✅ CI 빌드(2026-08-17 CONFIG 추가) | ✅ 실기 실측(45.152/45.162, `/proc/kallsyms`+`insmod`) |
+| broadwell / broadwellnkv2 / broadwellntbap / denverton / purley / r1000 / v1000 | 미검증 | 미검증 | ⚠️ 구버전 `sync_file.ko` hand-copy 잔존(교체 필요) | 미검증 | CI 미빌드(CONFIG 미설정) | ⚠️ mshell-modules 상 파일이 broadwellnk 구버전과 byte-identical — 개별 검증 안 됨 |
+
+**오늘(2026-08-17) 발견/수정된 sync_file 이슈**: DSM 4.4.302 stock 커널은 버전(7.2/7.3/7.4)
+무관하게 `CONFIG_SYNC_FILE`이 비활성이라 `sync_file_create`/`sync_file_get_fence`가 host에
+전무함 — vendor `drivers/dma-buf/sync_file.c`를 `drm-y`에 fold해 `drm.ko`가 자체 제공하도록
+수정(`compat/backport-include/linux/sync_file.h`). **모든 4.4.302 플랫폼에 공통 적용됨.**
+단, mshell-modules 쪽에 이미 배포된 구버전 독립 `sync_file.ko`(16개 조합)는 신 `drm.ko`와
+심볼이 중복되므로 제거 필요.
+
+**DSM 7.4 특이사항**: 10개 플랫폼 전부 이 저장소 CI 산출물만 존재(레거시 backfill 전무) —
+`drm_panel_orientation_quirks.ko`(오늘 CONFIG 추가분 제외)와 `hdmi`/`backlight`/`drm_mipi_dsi`가
+broadwellnk 외 9개 플랫폼엔 전혀 없다. `drm_mipi_dsi.c`는 이 저장소 vendor 소스에 이미 존재하므로
+`CONFIG_DRM_MIPI_DSI=m` 워크플로우 추가만으로 해결 가능하나, `hdmi.c`/`backlight.c`는
+`drivers/video/` 트리 자체가 vendoring 되어 있지 않아 별도 작업이 필요하다.
+
+관련 저장소: [PeterSuh-Q3/mshell-modules](https://github.com/PeterSuh-Q3/mshell-modules) —
+이 저장소의 CI 산출물을 배포·패키징하는 쪽. `thirdparty/blacklist.lst`,
+`.github/workflows/main-tar-modules.yml`의 플랫폼별 `case` 문에서 host 빌트인 예외를 관리한다.
+동일 매트릭스가 그쪽 README에도 있다.
