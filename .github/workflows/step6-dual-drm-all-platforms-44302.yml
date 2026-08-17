@@ -1,9 +1,10 @@
-name: "[STEP6] Dual DRM 통합 빌드 (ALL platforms 4.4.302)"
+name: "[STEP6] Dual DRM 통합 빌드 (ALL platforms 4.4.302, DSM 7.2/7.3)"
 
-# 10 플랫폼 × DSM 7.2/7.3/7.4 = 30 빌드 매트릭스
+# 10 플랫폼 × DSM 7.2/7.3 = 20 빌드 매트릭스
 # geminilake-7.3 는 step6-dual-drm-geminilake-44302.yml 로 이미 완료.
-# 이 워크플로우는 나머지 조합 + 재빌드가 필요한 경우 전체 수행.
-# DSM 7.4: 커널 4.4.302 (apollolake/broadwell 등 동일 커널, 2026-07-09 공개 확인)
+# 이 워크플로우는 나머지 19 조합 + 재빌드가 필요한 경우 전체 수행.
+# DSM 7.4 는 별도 워크플로우(step6-dual-drm-all-platforms-dsm74-44302.yml)로 분리 관리
+# — 7.4에서만 Unknown symbol 이슈가 발생해 compat/shim 조정이 7.2/7.3과 달라질 수 있음.
 
 on:
   workflow_dispatch:
@@ -13,7 +14,7 @@ on:
         required: false
         default: ""
       versions:
-        description: "DSM 버전 목록 (공백 구분, 빈값=7.2 7.3 7.4 전체)"
+        description: "DSM 버전 목록 (공백 구분, 빈값=7.2 7.3 전체)"
         required: false
         default: ""
 
@@ -49,16 +50,6 @@ jobs:
           - { version: "7.3", platform: r1000 }
           - { version: "7.2", platform: v1000 }
           - { version: "7.3", platform: v1000 }
-          - { version: "7.4", platform: geminilake }
-          - { version: "7.4", platform: apollolake }
-          - { version: "7.4", platform: broadwellnk }
-          - { version: "7.4", platform: broadwell }
-          - { version: "7.4", platform: broadwellnkv2 }
-          - { version: "7.4", platform: broadwellntbap }
-          - { version: "7.4", platform: denverton }
-          - { version: "7.4", platform: purley }
-          - { version: "7.4", platform: r1000 }
-          - { version: "7.4", platform: v1000 }
 
     runs-on: ubuntu-latest
     steps:
