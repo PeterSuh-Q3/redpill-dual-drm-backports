@@ -221,7 +221,18 @@ ssize_t hdmi_avi_infoframe_pack(struct hdmi_avi_infoframe *frame, void *buffer,
 				size_t size);
 ssize_t hdmi_avi_infoframe_pack_only(const struct hdmi_avi_infoframe *frame,
 				     void *buffer, size_t size);
+
+/* ★ 2026-08-17: apollolake host 는 hdmi_avi_infoframe_init 은 빌트인이지만
+ * hdmi_avi_infoframe_check(~5.0+, 검증전용 함수)는 없음(실기 확인) — 동일
+ * IN_KERNEL 가드로 no-op(항상 통과) 스텁 처리. */
+#ifdef CONFIG_DRM_HDMI_IN_KERNEL
+static inline int hdmi_avi_infoframe_check(struct hdmi_avi_infoframe *frame)
+{
+	return 0;
+}
+#else
 int hdmi_avi_infoframe_check(struct hdmi_avi_infoframe *frame);
+#endif
 
 /* ★ 2026-08-17: geminilake/apollolake host 는 hdmi_avi/audio/vendor_infoframe_init
  * 은 빌트인 제공하지만 hdmi_drm_infoframe_init(HDR, 더 신형 기능)만 없음(부분결손,
@@ -293,7 +304,14 @@ ssize_t hdmi_spd_infoframe_pack(struct hdmi_spd_infoframe *frame, void *buffer,
 				size_t size);
 ssize_t hdmi_spd_infoframe_pack_only(const struct hdmi_spd_infoframe *frame,
 				     void *buffer, size_t size);
+#ifdef CONFIG_DRM_HDMI_IN_KERNEL
+static inline int hdmi_spd_infoframe_check(struct hdmi_spd_infoframe *frame)
+{
+	return 0;
+}
+#else
 int hdmi_spd_infoframe_check(struct hdmi_spd_infoframe *frame);
+#endif
 
 enum hdmi_audio_coding_type {
 	HDMI_AUDIO_CODING_TYPE_STREAM,
@@ -431,7 +449,14 @@ ssize_t hdmi_vendor_infoframe_pack(struct hdmi_vendor_infoframe *frame,
 				   void *buffer, size_t size);
 ssize_t hdmi_vendor_infoframe_pack_only(const struct hdmi_vendor_infoframe *frame,
 					void *buffer, size_t size);
+#ifdef CONFIG_DRM_HDMI_IN_KERNEL
+static inline int hdmi_vendor_infoframe_check(struct hdmi_vendor_infoframe *frame)
+{
+	return 0;
+}
+#else
 int hdmi_vendor_infoframe_check(struct hdmi_vendor_infoframe *frame);
+#endif
 
 union hdmi_vendor_any_infoframe {
 	struct {
@@ -467,8 +492,16 @@ union hdmi_infoframe {
 
 ssize_t hdmi_infoframe_pack(union hdmi_infoframe *frame, void *buffer,
 			    size_t size);
+#ifdef CONFIG_DRM_HDMI_IN_KERNEL
+static inline ssize_t hdmi_infoframe_pack_only(const union hdmi_infoframe *frame,
+						void *buffer, size_t size)
+{
+	return -ENOSYS;
+}
+#else
 ssize_t hdmi_infoframe_pack_only(const union hdmi_infoframe *frame,
 				 void *buffer, size_t size);
+#endif
 int hdmi_infoframe_check(union hdmi_infoframe *frame);
 int hdmi_infoframe_unpack(union hdmi_infoframe *frame,
 			  const void *buffer, size_t size);
