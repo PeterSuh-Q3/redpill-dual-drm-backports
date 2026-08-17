@@ -3,9 +3,11 @@ name: "[COPY] thirdparty → mshell-modules/thirdparty"
 # redpill-dual-drm-backports/thirdparty/ 의 .ko 를
 # mshell-modules/thirdparty/ 로 복사.
 #
-# 플랫폼별 커널 빌트인 제외:
-#   apollolake / geminilake: intel-gtt.ko, interval_tree.ko (커널 빌트인)
-#   그 외 플랫폼: 제외 없음
+# ★ 2026-08-17: apollolake/geminilake의 intel-gtt.ko/interval_tree.ko
+# (커널 빌트인이라 중복 export 충돌) 제외 로직을 여기서 걷어냄 —
+# 이제 빌드 단계(redpill CI, CONFIG_INTERVAL_TREE_IN_KERNEL 가드 등)에서
+# 해당 플랫폼은 애초에 이 .ko 를 생산하지 않으므로 복사할 대상 자체가 없음.
+# (판단 로직은 build-time 으로 이전, 여기는 단순 복사만 수행)
 
 on:
   workflow_dispatch:
@@ -29,35 +31,19 @@ jobs:
           path: dst
           fetch-depth: 1
 
-      - name: Copy .ko files with platform-specific exclusions
+      - name: Copy .ko files
         run: |
-          ATOM_EXCLUDE="intel-gtt.ko interval_tree.ko"
-
           total=0
           for src_dir in src/thirdparty/*/; do
             entry=$(basename "$src_dir")
             [[ "$entry" == *"-4.4.302" ]] || continue
 
-            platform=$(echo "$entry" | sed 's/-[0-9]\.[0-9]*-4\.4\.302$//')
             dst_dir="dst/thirdparty/${entry}"
             mkdir -p "$dst_dir"
 
             copied=0
             for ko in "$src_dir"*.ko; do
               [ -f "$ko" ] || continue
-              fname=$(basename "$ko")
-
-              if [[ "$platform" == "apollolake" || "$platform" == "geminilake" ]]; then
-                skip=false
-                for excl in $ATOM_EXCLUDE; do
-                  [ "$fname" = "$excl" ] && skip=true && break
-                done
-                if $skip; then
-                  echo "  [skip builtin] ${entry}/${fname}"
-                  continue
-                fi
-              fi
-
               cp -f "$ko" "$dst_dir/"
               copied=$((copied+1))
             done
