@@ -37,11 +37,14 @@ static struct page *fb_deferred_io_page(struct fb_info *info, unsigned long offs
 }
 
 /* this is to find and return the vmalloc-ed fb pages */
-static vm_fault_t fb_deferred_io_fault(struct vm_fault *vmf)
+/* ★ 2026-08-17: DSM 4.4.302 vm_operations_struct.fault 는 (vma, vmf) 2-인자
+ * 시그니처(4.11+ vmf->vma 단일인자와 다름) — ttm_bo_vm.c 의 동일 백포트
+ * 패턴(선례) 그대로 적용. */
+static vm_fault_t fb_deferred_io_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	unsigned long offset;
 	struct page *page;
-	struct fb_info *info = vmf->vma->vm_private_data;
+	struct fb_info *info = vma->vm_private_data;
 
 	offset = vmf->pgoff << PAGE_SHIFT;
 	if (offset >= info->fix.smem_len)
@@ -53,8 +56,8 @@ static vm_fault_t fb_deferred_io_fault(struct vm_fault *vmf)
 
 	get_page(page);
 
-	if (vmf->vma->vm_file)
-		page->mapping = vmf->vma->vm_file->f_mapping;
+	if (vma->vm_file)
+		page->mapping = vma->vm_file->f_mapping;
 	else
 		printk(KERN_ERR "no mapping available\n");
 
@@ -90,10 +93,10 @@ int fb_deferred_io_fsync(struct file *file, loff_t start, loff_t end, int datasy
 EXPORT_SYMBOL_GPL(fb_deferred_io_fsync);
 
 /* vm_ops->page_mkwrite handler */
-static vm_fault_t fb_deferred_io_mkwrite(struct vm_fault *vmf)
+static vm_fault_t fb_deferred_io_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	struct page *page = vmf->page;
-	struct fb_info *info = vmf->vma->vm_private_data;
+	struct fb_info *info = vma->vm_private_data;
 	struct fb_deferred_io *fbdefio = info->fbdefio;
 	struct page *cur;
 
@@ -103,7 +106,7 @@ static vm_fault_t fb_deferred_io_mkwrite(struct vm_fault *vmf)
 	deferred framebuffer IO. then if userspace touches a page
 	again, we repeat the same scheme */
 
-	file_update_time(vmf->vma->vm_file);
+	file_update_time(vma->vm_file);
 
 	/* protect against the workqueue changing the page list */
 	mutex_lock(&fbdefio->lock);

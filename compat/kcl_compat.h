@@ -553,4 +553,14 @@ _mshell_proc_create_seq(const char *name, umode_t mode,
 static atomic_t ignore_console_lock_warning = ATOMIC_INIT(0);
 #endif
 
+/* --- fs: file_write_and_wait_range (~4.13+) — fb_defio.c 필요, host 는 구형
+ * filemap_write_and_wait_range(mapping,...) 만 제공 → file->f_mapping 경유 래퍼. */
+#include <linux/fs.h>
+#ifndef file_write_and_wait_range
+static inline int file_write_and_wait_range(struct file *file, loff_t start, loff_t end)
+{
+	return filemap_write_and_wait_range(file->f_mapping, start, end);
+}
+#endif
+
 #endif /* _MSHELL_KCL_COMPAT_H */

@@ -73,7 +73,8 @@ jobs:
             -I$OOT_ROOT/compat \
             -include $OOT_ROOT/compat/drm_compat.h \
             -include $OOT_ROOT/compat/kcl_compat.h \
-            -DCONFIG_DRM_HDMI_IN_KERNEL"
+            -DCONFIG_DRM_HDMI_IN_KERNEL \
+            -DCONFIG_FB_DEFERRED_IO"
 
           # host 가 hdmi/drm_mipi_dsi/sync_file/interval_tree 를 이미 빌트인(=y) 제공 —
           # 우리가 또 만들면 심볼 중복("invalid module format")으로 insmod 실패하므로
