@@ -16,6 +16,7 @@ jobs:
       matrix:
         include:
           - { version: "7.3", platform: broadwellnk }
+          - { version: "7.4", platform: broadwellnk }
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (main)
@@ -135,4 +136,16 @@ jobs:
             [ -n "$dup" ] && { c=$(echo "$dup"|grep -c .); echo "  [DUP] $(basename $ko): $c 중복"; total=$((total+c)); }
           done
           echo "=== 중복 export 총계: ${total} ==="
+
+          echo "=== .ko 별 미해결(Unknown) 심볼 점검 (host Module.symvers 대비) ==="
+          for ko in $(find "$PWD/drivers/gpu/drm" -name "*.ko" 2>/dev/null); do
+            nm -u "$ko" 2>/dev/null | awk '{print $2}' | sort -u > /tmp/ko_undef.txt
+            missing=$(comm -23 /tmp/ko_undef.txt /tmp/host_syms.txt)
+            if [ -n "$missing" ]; then
+              c=$(echo "$missing" | grep -c .)
+              echo "  [MISSING] $(basename $ko): $c 개"
+              echo "$missing" | sed 's/^/    - /'
+            fi
+          done
+
           grep "WARNING:.*undefined" /tmp/build.log || echo "(MODPOST WARNING 없음)"
