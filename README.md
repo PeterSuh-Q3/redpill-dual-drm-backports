@@ -86,12 +86,17 @@ compat/
 획일적으로 처리하면 심볼 중복(host 빌트인 플랫폼) 또는 Unknown symbol(host 미제공
 플랫폼) 중 하나로 반드시 실패한다.
 
-| 플랫폼 | hdmi.ko | drm_mipi_dsi.ko | sync_file | backlight.ko | drm_panel_orientation_quirks.ko | 검증 상태 |
+| 플랫폼 | hdmi.ko | drm_mipi_dsi.ko | sync_file | backlight.ko/fb.ko | drm_panel_orientation_quirks.ko | 검증 상태 |
 |---|---|---|---|---|---|---|
-| geminilake | host 빌트인 — 번들 금지 | host 빌트인 — 번들 금지 | ✅ `drm.ko` 자체 내장 | 레거시 번들(mshell-modules) | ✅ CI 빌드 | ✅ 확정 |
-| apollolake | host 빌트인 — 번들 금지 | host 빌트인 — 번들 금지 | ✅ `drm.ko` 자체 내장 | 레거시 번들(mshell-modules) | ✅ CI 빌드 | ✅ 확정 |
-| **broadwellnk** | **host 없음 — 번들 필요** | **host 없음 — 번들 필요** | ✅ `drm.ko` 자체 내장(2026-08-17 수정) | **host 없음 — 번들 필요**(7.4 자체 `fb.ko`도 결손) | ✅ CI 빌드(2026-08-17 CONFIG 추가) | ✅ 실기 실측(45.152/45.162, `/proc/kallsyms`+`insmod`) |
-| broadwell / broadwellnkv2 / broadwellntbap / denverton / purley / r1000 / v1000 | 미검증 | 미검증 | ⚠️ 구버전 `sync_file.ko` hand-copy 잔존(교체 필요) | 미검증 | CI 미빌드(CONFIG 미설정) | ⚠️ mshell-modules 상 파일이 broadwellnk 구버전과 byte-identical — 개별 검증 안 됨 |
+| geminilake / apollolake | host 빌트인 — 번들 금지 | host 빌트인 — 번들 금지 | ✅ `drm.ko` 자체 내장 | `.config` 상 `=m` (레거시 번들, mshell-modules) | ✅ CI 빌드 | ✅ 확정(`.config` CONFIG_HDMI/MIPI_DSI/SYNC_FILE=y, 7.2/7.3/7.4 동일) |
+| **broadwellnk / broadwell / broadwellnkv2 / broadwellntbap / denverton / purley / r1000 / v1000** (8개 전부) | **host 없음 — 번들 필요** | **host 없음 — 번들 필요** | ✅ `drm.ko` 자체 내장(2026-08-17 수정) | `.config` 상 `=m`이나 **broadwellnk 7.4 실기엔 파일 자체 부재** — 컴파일 가능≠설치 이미지 포함 보장 | CI 미빌드(CONFIG 미설정, broadwellnk만 2026-08-17 추가) | ✅ **`.config` 전수 확인**(`dante90/syno-compiler:7.2/7.3/7.4`, 8플랫폼×3버전=24조합 전부 CONFIG_HDMI/MIPI_DSI/SYNC_FILE 미설정) + broadwellnk만 실기 kallsyms/insmod 이중검증 |
+
+**DSM 버전(7.2/7.3/7.4)은 이 매트릭스에 영향 없음 — 플랫폼 커널 계열로만 갈린다.**
+2026-08-17 `dante90/syno-compiler:7.2/7.3/7.4` 이미지의 각 플랫폼 `.config`를 직접 대조해 확정 —
+실기 없이도 `CONFIG_HDMI`/`CONFIG_DRM_MIPI_DSI`/`CONFIG_SYNC_FILE`/`CONFIG_DRM_PANEL_ORIENTATION_QUIRKS`
+유무로 host 빌트인 여부를 판별 가능함을 broadwellnk 실기 결과와 대조해 검증 완료.
+단 `backlight.ko`/`fb.ko`는 `.config`가 `=m`이라도 실제 DSM 설치 이미지 포함 여부는 별개 —
+실기 확인이 계속 필요하다.
 
 **오늘(2026-08-17) 발견/수정된 sync_file 이슈**: DSM 4.4.302 stock 커널은 버전(7.2/7.3/7.4)
 무관하게 `CONFIG_SYNC_FILE`이 비활성이라 `sync_file_create`/`sync_file_get_fence`가 host에
