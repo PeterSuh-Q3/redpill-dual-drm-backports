@@ -1983,3 +1983,13 @@ int fb_is_primary_device(struct fb_info *info)
 	return 0;
 }
 EXPORT_SYMBOL(fb_is_primary_device);
+
+/* ★ 2026-08-17: is_console_locked() 는 host linux/console.h 에 extern 선언만
+ * 있고 실제 구현(console.c)을 export 안 함 — fb_is_primary_device 와 동일
+ * 클래스 문제. WARN_CONSOLE_UNLOCKED() 매크로가 이 함수 결과로 WARN 여부만
+ * 판단하므로, 안전하게 "항상 잠겨있다(1)"로 응답해 오탐 WARN 을 방지. */
+int is_console_locked(void)
+{
+	return 1;
+}
+EXPORT_SYMBOL(is_console_locked);

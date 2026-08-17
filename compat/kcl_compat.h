@@ -552,6 +552,10 @@ _mshell_proc_create_seq(const char *name, umode_t mode,
 #ifndef ignore_console_lock_warning
 static atomic_t ignore_console_lock_warning = ATOMIC_INIT(0);
 #endif
+/* is_console_locked(void) — host console.h 는 extern 선언만 있고 실제 구현을
+ * export 안 함(컴파일은 통과, insmod 시 "Unknown symbol"). fb_is_primary_device
+ * 와 동일한 클래스의 문제라 같은 방식(실제 .c 파일에 real 구현 추가)으로
+ * fbmem.c 자체에서 처리 — 여기 헤더에는 정의하지 않음(extern 선언과 충돌 방지). */
 
 /* --- fs: file_write_and_wait_range (~4.13+) — fb_defio.c 필요, host 는 구형
  * filemap_write_and_wait_range(mapping,...) 만 제공 → file->f_mapping 경유 래퍼. */

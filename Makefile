@@ -59,7 +59,11 @@ backlight-y := drivers/video/backlight/backlight.o
 obj-m += fb.o
 fb-y := drivers/video/fbdev/core/fbmem.o \
         drivers/video/fbdev/core/fbcmap.o \
-        drivers/video/fbdev/core/fb_defio.o
+        drivers/video/fbdev/core/fb_defio.o \
+        drivers/video/fbdev/core/fbsysfs.o \
+        drivers/video/fbdev/core/modedb.o \
+        drivers/video/fbdev/core/fbcvt.o \
+        drivers/video/fbdev/core/fb_notify.o
 
 obj-m += cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 cfbfillrect-y := drivers/video/fbdev/core/cfbfillrect.o
