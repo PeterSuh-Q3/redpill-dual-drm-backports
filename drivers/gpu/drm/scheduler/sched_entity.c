@@ -197,7 +197,7 @@ long drm_sched_entity_flush(struct drm_sched_entity *entity, long timeout)
 		unsigned int report_count = 0;
 
 		while (!drm_sched_entity_is_idle(entity)) {
-			long waited = wait_event_killable_timeout(
+			long waited = wait_event_interruptible_timeout(
 				sched->job_scheduled,
 				drm_sched_entity_is_idle(entity), HZ);
 			if (waited < 0)
