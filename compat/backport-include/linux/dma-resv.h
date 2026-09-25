@@ -6,6 +6,7 @@
 #define _BPI_LINUX_DMA_RESV_H
 
 #include <linux/reservation.h>
+#include <linux/slab.h>
 
 #define dma_resv                 reservation_object
 #define dma_resv_list            reservation_object_list
@@ -59,7 +60,47 @@ static inline void dma_resv_add_excl_fence(struct reservation_object *obj,
 	reservation_object_add_excl_fence(obj, fence);
 }
 #define dma_resv_add_shared_fence reservation_object_add_shared_fence
-#define dma_resv_get_fences_rcu  reservation_object_get_fences_rcu
+/* Unlike dma_resv_get_fences_rcu(), the 4.4 reservation API requires a
+ * non-NULL exclusive-fence output. When callers pass NULL, the modern API
+ * appends that fence to the shared array; preserve that ownership contract. */
+static inline int k4_dma_resv_get_fences_rcu(struct reservation_object *obj,
+					     struct dma_fence **pfence_excl,
+					     unsigned int *pshared_count,
+					     struct dma_fence ***pshared)
+{
+	struct dma_fence *excl = NULL, **shared = NULL, **all;
+	unsigned int count = 0, i;
+	int ret;
+
+	ret = reservation_object_get_fences_rcu(obj, &excl, &count, &shared);
+	if (ret)
+		return ret;
+	if (pfence_excl) {
+		*pfence_excl = excl;
+		*pshared_count = count;
+		*pshared = shared;
+		return 0;
+	}
+	if (!excl) {
+		*pshared_count = count;
+		*pshared = shared;
+		return 0;
+	}
+
+	all = krealloc(shared, sizeof(*all) * (count + 1), GFP_KERNEL);
+	if (!all) {
+		for (i = 0; i < count; i++)
+			dma_fence_put(shared[i]);
+		dma_fence_put(excl);
+		kfree(shared);
+		return -ENOMEM;
+	}
+	all[count++] = excl;
+	*pshared_count = count;
+	*pshared = all;
+	return 0;
+}
+#define dma_resv_get_fences_rcu k4_dma_resv_get_fences_rcu
 #define dma_resv_wait_timeout_rcu reservation_object_wait_timeout_rcu
 #define dma_resv_test_signaled_rcu reservation_object_test_signaled_rcu
 #define dma_resv_copy_fences     reservation_object_copy_fences
