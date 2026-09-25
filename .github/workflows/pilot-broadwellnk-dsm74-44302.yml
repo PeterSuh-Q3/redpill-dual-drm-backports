@@ -1,4 +1,4 @@
-name: "[PILOT] broadwellnk DSM 7.4 dual DRM clean build"
+name: "[PILOT] broadwellnk DSM 7.4 K4 CPU-VM diagnostic"
 
 on:
   workflow_dispatch:
@@ -54,6 +54,7 @@ jobs:
           [[ "$release" == 4.4.302* ]] || { echo "Unexpected kernel: $release" >&2; exit 1; }
           printf 'source_commit=%s\nplatform=%s\ndsm=%s\nkernel=%s\n' \
             "$GITHUB_SHA" "$PLATFORM" "$DSM_VERSION" "$release" > build-provenance.txt
+          printf 'pilot_vm_update_mode=1\npilot_sched_diag=on\n' >> build-provenance.txt
           sha256sum "ds.${PLATFORM}-${DSM_VERSION}.env.txz" \
             "ds.${PLATFORM}-${DSM_VERSION}.dev.txz" >> build-provenance.txt
           "$compiler" --version | head -1 >> build-provenance.txt
