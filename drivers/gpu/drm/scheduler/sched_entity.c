@@ -176,6 +176,12 @@ long drm_sched_entity_flush(struct drm_sched_entity *entity, long timeout)
 		return 0;
 
 	sched = entity->rq->sched;
+#ifdef SYNO_DRM_SCHED_DIAG
+	pr_warn("syno-drm-diag: flush enter entity=%p sched=%p pid=%d exiting=%d list_empty=%d queued=%u stopped=%d ready=%d\n",
+		entity, sched, current->pid, !!(current->flags & PF_EXITING),
+		list_empty(&entity->list), spsc_queue_count(&entity->job_queue),
+		entity->stopped, sched->ready);
+#endif
 	/**
 	 * The client will not queue more IBs during this fini, consume existing
 	 * queued IBs or discard them on SIGKILL
@@ -187,9 +193,32 @@ long drm_sched_entity_flush(struct drm_sched_entity *entity, long timeout)
 					drm_sched_entity_is_idle(entity),
 					timeout);
 	} else {
+#ifdef SYNO_DRM_SCHED_DIAG
+		unsigned int report_count = 0;
+
+		while (!drm_sched_entity_is_idle(entity)) {
+			long waited = wait_event_killable_timeout(
+				sched->job_scheduled,
+				drm_sched_entity_is_idle(entity), HZ);
+			if (waited < 0)
+				break;
+			if (!waited && report_count++ < 5)
+				pr_warn("syno-drm-diag: flush wait entity=%p sched=%p pid=%d list_empty=%d queued=%u stopped=%d ready=%d\n",
+					entity, sched, current->pid,
+					list_empty(&entity->list),
+					spsc_queue_count(&entity->job_queue),
+					entity->stopped, sched->ready);
+		}
+#else
 		wait_event_killable(sched->job_scheduled,
 				    drm_sched_entity_is_idle(entity));
+#endif
 	}
+#ifdef SYNO_DRM_SCHED_DIAG
+	pr_warn("syno-drm-diag: flush exit entity=%p pid=%d list_empty=%d queued=%u\n",
+		entity, current->pid, list_empty(&entity->list),
+		spsc_queue_count(&entity->job_queue));
+#endif
 
 	/* For killed process disable any more IBs enqueue right now */
 	last_user = cmpxchg(&entity->last_user, current->group_leader, NULL);
