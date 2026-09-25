@@ -87,8 +87,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifact-out
-          for module in amdgpu gpu-sched drm ttm i915 drm_kms_helper; do
-            mapfile -t matches < <(find drivers/gpu/drm -type f -name "${module}.ko")
+          required=(amdgpu backlight cfbcopyarea cfbfillrect cfbimgblt drm
+            drm_kms_helper drm_mipi_dsi drm_panel_orientation_quirks fb
+            fb_sys_fops gpu-sched i915 intel-gtt interval_tree syscopyarea
+            sysfillrect sysimgblt ttm)
+          for module in "${required[@]}"; do
+            mapfile -t matches < <(find drivers -type f -name "${module}.ko")
+            if [[ ${#matches[@]} -eq 0 ]]; then
+              mapfile -t matches < <(find . -maxdepth 1 -type f -name "${module}.ko")
+            fi
             [[ ${#matches[@]} -eq 1 ]] || {
               echo "Expected exactly one fresh ${module}.ko, found ${#matches[@]}" >&2
               exit 1
