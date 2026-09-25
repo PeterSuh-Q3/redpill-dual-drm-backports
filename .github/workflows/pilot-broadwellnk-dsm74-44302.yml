@@ -1,0 +1,114 @@
+name: "[PILOT] broadwellnk DSM 7.4 dual DRM clean build"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      PLATFORM: broadwellnk
+      DSM_VERSION: "7.4"
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Cache Synology toolkit archives
+        uses: actions/cache@v4
+        with:
+          path: |
+            ds.broadwellnk-7.4.env.txz
+            ds.broadwellnk-7.4.dev.txz
+          key: toolkit-broadwellnk-7.4
+
+      - name: Download and unpack Synology toolkit
+        shell: bash
+        run: |
+          set -euo pipefail
+          for kind in env dev; do
+            archive="ds.${PLATFORM}-${DSM_VERSION}.${kind}.txz"
+            if [[ ! -f "$archive" ]]; then
+              wget -q "https://global.synologydownload.com/download/ToolChain/toolkit/${DSM_VERSION}/${PLATFORM}/${archive}"
+            fi
+            mkdir -p "$([[ $kind == env ]] && echo toolchain || echo ksrc)"
+            tar -xf "$archive" -C "$([[ $kind == env ]] && echo toolchain || echo ksrc)"
+          done
+
+      - name: Verify target and build inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          klib="$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${DSM_VERSION}/build"
+          compiler="$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-gcc"
+          test -d "$klib"
+          test -x "$compiler"
+          release=$(cat "$klib/include/config/kernel.release")
+          [[ "$release" == 4.4.302* ]] || { echo "Unexpected kernel: $release" >&2; exit 1; }
+          printf 'source_commit=%s\nplatform=%s\ndsm=%s\nkernel=%s\n' \
+            "$GITHUB_SHA" "$PLATFORM" "$DSM_VERSION" "$release" > build-provenance.txt
+          sha256sum "ds.${PLATFORM}-${DSM_VERSION}.env.txz" \
+            "ds.${PLATFORM}-${DSM_VERSION}.dev.txz" >> build-provenance.txt
+          "$compiler" --version | head -1 >> build-provenance.txt
+          cat build-provenance.txt
+
+      - name: Build dual DRM from a clean checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          export KLIB_BUILD="$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${DSM_VERSION}/build"
+          export CROSS_COMPILE="$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-"
+          export OOT_ROOT="$PWD"
+          OOT_KCPPFLAGS="-I$OOT_ROOT/compat/backport-include \
+            -I$OOT_ROOT/include -I$OOT_ROOT/include/uapi -I$OOT_ROOT/compat \
+            -include $OOT_ROOT/compat/drm_compat.h \
+            -include $OOT_ROOT/compat/kcl_compat.h \
+            -DCONFIG_FB_DEFERRED_IO -DCONFIG_FB_NOTIFY"
+
+          make -C "$KLIB_BUILD" M="$OOT_ROOT" \
+            CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m \
+            CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
+            CONFIG_DRM_TTM=m CONFIG_DRM_SCHED=m CONFIG_DRM_AMDGPU=m \
+            CONFIG_AGP_INTEL=m CONFIG_DRM_MIPI_DSI=m \
+            CONFIG_DRM_PANEL_ORIENTATION_QUIRKS=m \
+            CONFIG_FB_NOTIFY_IN_KERNEL=y \
+            KCPPFLAGS="$OOT_KCPPFLAGS" \
+            modules 2>&1 | tee build-pilot.log
+
+      - name: Verify complete module set and record hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifact-out
+          for module in amdgpu gpu-sched drm ttm i915 drm_kms_helper; do
+            mapfile -t matches < <(find drivers/gpu/drm -type f -name "${module}.ko")
+            [[ ${#matches[@]} -eq 1 ]] || {
+              echo "Expected exactly one fresh ${module}.ko, found ${#matches[@]}" >&2
+              exit 1
+            }
+            install -m 0644 "${matches[0]}" "artifact-out/${module}.ko"
+            [[ $(modinfo -F vermagic "artifact-out/${module}.ko") == 4.4.302* ]] || {
+              echo "Wrong vermagic: ${module}.ko" >&2
+              exit 1
+            }
+          done
+          sha256sum artifact-out/*.ko | tee artifact-out/SHA256SUMS
+          cp build-provenance.txt artifact-out/
+
+      - name: Upload pilot modules and build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: broadwellnk-7.4-4.4.302-dual-drm-${{ github.run_id }}
+          path: |
+            artifact-out/
+            build-pilot.log
+          if-no-files-found: error
+          retention-days: 14
