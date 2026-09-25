@@ -114,7 +114,12 @@ int amdgpu_vm_fragment_size = -1;
 int amdgpu_vm_block_size = -1;
 int amdgpu_vm_fault_stop = 0;
 int amdgpu_vm_debug = 0;
+#ifdef SYNO_AMDGPU_PILOT_CPU_VM_UPDATE
+/* Diagnostic pilot: bypass GPU-scheduled graphics VM page-table updates. */
+int amdgpu_vm_update_mode = 1;
+#else
 int amdgpu_vm_update_mode = -1;
+#endif
 int amdgpu_exp_hw_support = 0;
 int amdgpu_dc = -1;
 int amdgpu_sched_jobs = 32;

@@ -71,7 +71,7 @@ jobs:
             -include $OOT_ROOT/compat/drm_compat.h \
             -include $OOT_ROOT/compat/kcl_compat.h \
             -DCONFIG_FB_DEFERRED_IO -DCONFIG_FB_NOTIFY \
-            -DSYNO_DRM_SCHED_DIAG"
+            -DSYNO_DRM_SCHED_DIAG -DSYNO_AMDGPU_PILOT_CPU_VM_UPDATE"
 
           make -C "$KLIB_BUILD" M="$OOT_ROOT" \
             CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m \
