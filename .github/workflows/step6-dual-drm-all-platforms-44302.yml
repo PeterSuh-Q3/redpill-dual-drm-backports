@@ -1,10 +1,10 @@
-name: "[STEP6] Dual DRM 통합 빌드 (ALL platforms 4.4.302, DSM 7.2/7.3)"
+name: "[STEP6] Dual DRM 통합 빌드 (ALL platforms 4.4.302, DSM 7.2/7.3/7.4)"
 
-# 10 플랫폼 × DSM 7.2/7.3 = 20 빌드 매트릭스
+# 10 플랫폼 × DSM 7.2/7.3/7.4 = 30 빌드 매트릭스
 # geminilake-7.3 는 step6-dual-drm-geminilake-44302.yml 로 이미 완료.
-# 이 워크플로우는 나머지 19 조합 + 재빌드가 필요한 경우 전체 수행.
-# DSM 7.4 는 별도 워크플로우(step6-dual-drm-all-platforms-dsm74-44302.yml)로 분리 관리
-# — 7.4에서만 Unknown symbol 이슈가 발생해 compat/shim 조정이 7.2/7.3과 달라질 수 있음.
+# DSM 7.4 조합도 이 풀빌드에서 함께 지원한다. 7.4 커널 입력과 export 심볼 차이는
+# 해당 matrix job 안에서 별도 기록·검증한다. DSM 7.4 단독 재실행은
+# step6-dual-drm-all-platforms-dsm74-44302.yml 에서도 가능하다.
 #
 # ★ 2026-08-17: module-output 브랜치 push 를 build 잡 20개가 동시에 직접 하던
 # 구조(fetch→checkout→commit→push 경합)에서 실제 데이터 유실 발생(동시 push race로
@@ -19,7 +19,7 @@ on:
         required: false
         default: ""
       versions:
-        description: "DSM 버전 목록 (공백 구분, 빈값=7.2 7.3 전체)"
+        description: "DSM 버전 목록 (공백 구분, 빈값=7.2 7.3 7.4 전체)"
         required: false
         default: ""
 
@@ -55,6 +55,16 @@ jobs:
           - { version: "7.3", platform: r1000 }
           - { version: "7.2", platform: v1000 }
           - { version: "7.3", platform: v1000 }
+          - { version: "7.4", platform: geminilake }
+          - { version: "7.4", platform: apollolake }
+          - { version: "7.4", platform: broadwellnk }
+          - { version: "7.4", platform: broadwell }
+          - { version: "7.4", platform: broadwellnkv2 }
+          - { version: "7.4", platform: broadwellntbap }
+          - { version: "7.4", platform: denverton }
+          - { version: "7.4", platform: purley }
+          - { version: "7.4", platform: r1000 }
+          - { version: "7.4", platform: v1000 }
 
     runs-on: ubuntu-latest
     steps:
@@ -91,6 +101,21 @@ jobs:
           fi
           mkdir ksrc
           tar xf $dev_tarball -C ksrc
+
+      - name: "[DSM 7.4] Verify actual kernel release"
+        if: matrix.version == '7.4'
+        run: |
+          KVER_FILE=$(find ksrc -path "*include/config/kernel.release" | head -1)
+          if [ -n "$KVER_FILE" ]; then
+            echo "[${{ matrix.platform }}-7.4] kernel.release = $(cat "$KVER_FILE")"
+            case "$(cat "$KVER_FILE")" in
+              4.4.302*) ;;
+              *) echo "Unexpected kernel release for DSM 7.4: $(cat "$KVER_FILE")" >&2; exit 1 ;;
+            esac
+          else
+            echo "[WARN] kernel.release is absent; showing kernel build Makefiles"
+            find ksrc -maxdepth 6 -name Makefile -path "*build*" -exec head -5 {} \; 2>/dev/null | head -20
+          fi
 
       - name: "Build (Dual DRM: i915 + amdgpu)"
         run: |
@@ -192,6 +217,23 @@ jobs:
           done
           echo "=== 중복 export 총계: ${total} ==="
           grep "WARNING:.*undefined" /tmp/build.log || echo "(MODPOST WARNING 없음)"
+
+      - name: "[DSM 7.4 VERIFY] unresolved symbols against toolkit exports"
+        if: matrix.version == '7.4' && always()
+        run: |
+          export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
+          SYMV="$KLIB_BUILD/Module.symvers"
+          [ -f "$SYMV" ] || { echo "[WARN] host Module.symvers 없음"; exit 0; }
+          awk '{print $2}' "$SYMV" | sort -u > /tmp/host_syms.txt
+          for ko in $(find "$PWD/drivers/gpu/drm" -name "*.ko" 2>/dev/null); do
+            nm -u "$ko" 2>/dev/null | awk '{print $2}' | sort -u > /tmp/ko_undef.txt
+            missing=$(comm -23 /tmp/ko_undef.txt /tmp/host_syms.txt)
+            if [ -n "$missing" ]; then
+              echo "[MISSING] $(basename "$ko")"
+              echo "$missing" | sed 's/^/  /'
+            fi
+          done
+          grep -E "WARNING:.*undefined|Unknown symbol" /tmp/build.log || echo "(MODPOST WARNING 없음)"
 
   push:
     needs: build
