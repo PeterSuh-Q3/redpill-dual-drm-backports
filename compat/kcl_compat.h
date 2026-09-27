@@ -138,6 +138,7 @@ static int __kcl_sysctl_one  __attribute__((unused)) = 1;
 /* --- cpuhp: CPU hotplug states/helpers (4.7+) --- */
 #include <linux/cpu.h>
 #ifndef CPUHP_INVALID
+#define KCL_CPUHP_STUB 1
 #define CPUHP_INVALID    -1
 #define CPUHP_AP_ONLINE_DYN 130
 enum cpuhp_state;

@@ -1,0 +1,115 @@
+name: "[PILOT] geminilake DSM 7.4 K4 i915 PMU"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      PLATFORM: geminilake
+      DSM_VERSION: "7.4"
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Cache Synology toolkit archives
+        uses: actions/cache@v4
+        with:
+          path: |
+            ds.geminilake-7.4.env.txz
+            ds.geminilake-7.4.dev.txz
+          key: toolkit-geminilake-7.4
+
+      - name: Download and unpack Synology toolkit
+        shell: bash
+        run: |
+          set -euo pipefail
+          for kind in env dev; do
+            archive="ds.${PLATFORM}-${DSM_VERSION}.${kind}.txz"
+            if [[ ! -f "$archive" ]]; then
+              wget -q "https://global.synologydownload.com/download/ToolChain/toolkit/${DSM_VERSION}/${PLATFORM}/${archive}"
+            fi
+            destination="toolchain"
+            [[ "$kind" == dev ]] && destination="ksrc"
+            mkdir -p "$destination"
+            tar -xf "$archive" -C "$destination"
+          done
+
+      - name: Verify target and i915 PMU fallback source
+        shell: bash
+        run: |
+          set -euo pipefail
+          klib="$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${DSM_VERSION}/build"
+          compiler="$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-gcc"
+          test -d "$klib"
+          test -x "$compiler"
+          release=$(cat "$klib/include/config/kernel.release")
+          [[ "$release" == 4.4.302* ]] || { echo "Unexpected kernel: $release" >&2; exit 1; }
+          grep -qx '#define KCL_CPUHP_STUB 1' compat/kcl_compat.h
+          grep -q 'cpumask_set_cpu(cpu, &i915_pmu_cpumask)' drivers/gpu/drm/i915/i915_pmu.c
+          printf 'source_commit=%s\nplatform=%s\ndsm=%s\nkernel=%s\n' \
+            "$GITHUB_SHA" "$PLATFORM" "$DSM_VERSION" "$release" > build-provenance.txt
+          sha256sum "ds.${PLATFORM}-${DSM_VERSION}.env.txz" \
+            "ds.${PLATFORM}-${DSM_VERSION}.dev.txz" >> build-provenance.txt
+          "$compiler" --version | head -1 >> build-provenance.txt
+          cat build-provenance.txt
+
+      - name: Build dual DRM from a clean checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          export KLIB_BUILD="$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${DSM_VERSION}/build"
+          export CROSS_COMPILE="$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-"
+          export OOT_ROOT="$PWD"
+          OOT_KCPPFLAGS="-I$OOT_ROOT/compat/backport-include \
+            -I$OOT_ROOT/include -I$OOT_ROOT/include/uapi -I$OOT_ROOT/compat \
+            -include $OOT_ROOT/compat/drm_compat.h \
+            -include $OOT_ROOT/compat/kcl_compat.h \
+            -DCONFIG_FB_DEFERRED_IO -DCONFIG_FB_NOTIFY -DCONFIG_DRM_HDMI_IN_KERNEL"
+
+          make -C "$KLIB_BUILD" M="$OOT_ROOT" \
+            CONFIG_DRM=m CONFIG_DRM_KMS_HELPER=m \
+            CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
+            CONFIG_DRM_TTM=m CONFIG_DRM_SCHED=m CONFIG_DRM_AMDGPU=m \
+            CONFIG_AGP_INTEL=m CONFIG_DRM_MIPI_DSI=m \
+            CONFIG_DRM_PANEL_ORIENTATION_QUIRKS=m \
+            CONFIG_FB_NOTIFY_IN_KERNEL=y CONFIG_DRM_SYNC_FILE_IN_KERNEL=y \
+            CONFIG_INTERVAL_TREE_IN_KERNEL=y CONFIG_DRM_HDMI_IN_KERNEL=y \
+            KCPPFLAGS="$OOT_KCPPFLAGS" modules 2>&1 | tee build-pilot.log
+
+      - name: Verify i915 PMU module and record hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f drivers/gpu/drm/i915/i915.ko
+          [[ $(modinfo -F vermagic drivers/gpu/drm/i915/i915.ko) == 4.4.302* ]]
+          nm -u drivers/gpu/drm/i915/i915.ko | grep -q ' perf_pmu_register$'
+          if nm -u drivers/gpu/drm/i915/i915.ko | grep -q ' perf_pmu_migrate_context$'; then
+            echo "Unexpected CPU-hotplug dependency: perf_pmu_migrate_context" >&2
+            exit 1
+          fi
+          mkdir -p artifact-out
+          find drivers/gpu/drm -type f -name '*.ko' -exec install -m 0644 {} artifact-out/ \;
+          test -f artifact-out/i915.ko
+          sha256sum artifact-out/*.ko | tee artifact-out/SHA256SUMS
+          cp build-provenance.txt artifact-out/
+
+      - name: Upload pilot modules and build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: geminilake-7.4-4.4.302-dual-drm-i915-pmu-${{ github.run_id }}
+          path: |
+            artifact-out/
+            build-pilot.log
+          if-no-files-found: error
+          retention-days: 14

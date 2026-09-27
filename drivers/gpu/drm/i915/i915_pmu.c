@@ -1017,6 +1017,32 @@ static int i915_pmu_cpu_offline(unsigned int cpu, struct hlist_node *node)
 
 static enum cpuhp_state cpuhp_slot = CPUHP_INVALID;
 
+#ifdef KCL_CPUHP_STUB
+/*
+ * DSM 4.4 has no CPU-hotplug state API.  The compatibility shim therefore
+ * provides no callbacks; treating that absence as an error unregisters an
+ * otherwise valid i915 PMU.  Select an already-online CPU as the fixed perf
+ * context instead.  DSM does not support CPU hot-unplug on this target.
+ */
+static int i915_pmu_register_cpuhp_state(struct i915_pmu *pmu)
+{
+	unsigned int cpu = cpumask_first(cpu_online_mask);
+
+	(void)pmu;
+
+	if (cpu >= nr_cpu_ids)
+		return -ENODEV;
+
+	cpumask_set_cpu(cpu, &i915_pmu_cpumask);
+	return 0;
+}
+
+static void i915_pmu_unregister_cpuhp_state(struct i915_pmu *pmu)
+{
+	(void)pmu;
+	cpumask_clear(&i915_pmu_cpumask);
+}
+#else
 static int i915_pmu_register_cpuhp_state(struct i915_pmu *pmu)
 {
 	enum cpuhp_state slot;
@@ -1046,6 +1072,7 @@ static void i915_pmu_unregister_cpuhp_state(struct i915_pmu *pmu)
 	WARN_ON(cpuhp_state_remove_instance(cpuhp_slot, &pmu->node));
 	cpuhp_remove_multi_state(cpuhp_slot);
 }
+#endif
 
 void i915_pmu_register(struct drm_i915_private *i915)
 {
