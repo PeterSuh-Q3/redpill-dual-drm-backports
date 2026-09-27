@@ -91,6 +91,8 @@ jobs:
         run: |
           set -euo pipefail
           test -f drivers/gpu/drm/i915/i915.ko
+          test -f drivers/char/agp/intel-gtt.ko
+          test -f drivers/gpu/drm/drm_mipi_dsi.ko
           [[ $(modinfo -F vermagic drivers/gpu/drm/i915/i915.ko) == 4.4.302* ]]
           nm -u drivers/gpu/drm/i915/i915.ko | grep -q ' perf_pmu_register$'
           if nm -u drivers/gpu/drm/i915/i915.ko | grep -q ' perf_pmu_migrate_context$'; then
@@ -98,8 +100,17 @@ jobs:
             exit 1
           fi
           mkdir -p artifact-out
-          find drivers/gpu/drm -type f -name '*.ko' -exec install -m 0644 {} artifact-out/ \;
+          find drivers -type f -name '*.ko' -exec install -m 0644 {} artifact-out/ \;
+          find . -maxdepth 1 -type f -name '*.ko' -exec install -m 0644 {} artifact-out/ \;
           test -f artifact-out/i915.ko
+          test -f artifact-out/intel-gtt.ko
+          test -f artifact-out/drm_mipi_dsi.ko
+          for module in artifact-out/*.ko; do
+            [[ $(modinfo -F vermagic "$module") == 4.4.302* ]] || {
+              echo "Wrong vermagic: $module" >&2
+              exit 1
+            }
+          done
           sha256sum artifact-out/*.ko | tee artifact-out/SHA256SUMS
           cp build-provenance.txt artifact-out/
 
