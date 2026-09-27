@@ -119,6 +119,7 @@ jobs:
 
       - name: "Build (Dual DRM: i915 + amdgpu)"
         run: |
+          set -o pipefail
           export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
           export CROSS_COMPILE=$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-
           export KBUILD_MODPOST_WARN=1
@@ -163,7 +164,13 @@ jobs:
             CONFIG_DRM_PANEL_ORIENTATION_QUIRKS=m \
             $EXTRA_CONFIG \
             KCPPFLAGS="$OOT_KCPPFLAGS" \
-            modules 2>&1 | tee /tmp/build.log || true
+            modules 2>&1 | tee /tmp/build.log
+          set +o pipefail
+
+          if grep -E 'WARNING:.*undefined|WARNING:.*exported twice|Unknown symbol' /tmp/build.log; then
+            echo "[ERROR] MODPOST reported unresolved or duplicate symbols" >&2
+            exit 1
+          fi
 
           # 디버그 심볼 제거
           find "$OOT_ROOT" -name "*.ko" | while read ko; do
@@ -186,10 +193,23 @@ jobs:
 
       - name: "Stage .ko for artifact upload"
         run: |
+          set -euo pipefail
           mkdir -p artifact-out
           find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} artifact-out/ \;
           find "$GITHUB_WORKSPACE/drivers/char/agp" -name "*.ko" -exec cp -f {} artifact-out/ \;
           find "$GITHUB_WORKSPACE" -maxdepth 1 -name "*.ko" -exec cp -f {} artifact-out/ \;
+          for module in drm drm_kms_helper i915 amdgpu ttm gpu-sched; do
+            test -s "artifact-out/$module.ko" || {
+              echo "[ERROR] Missing required module: $module.ko" >&2
+              exit 1
+            }
+          done
+          for module in artifact-out/*.ko; do
+            case "$(modinfo -F vermagic "$module")" in
+              4.4.302*) ;;
+              *) echo "[ERROR] Wrong vermagic: $module" >&2; exit 1 ;;
+            esac
+          done
           echo "=== artifact-out 내용 ==="
           ls -la artifact-out/
 
@@ -237,7 +257,6 @@ jobs:
 
   push:
     needs: build
-    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Checkout module-output branch
@@ -254,8 +273,23 @@ jobs:
 
       - name: "Merge into thirdparty/ and commit (single writer, no race)"
         run: |
+          set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          artifact_count=$(find downloaded -mindepth 1 -maxdepth 1 -type d -name 'modules-*' | wc -l)
+          if [ "$artifact_count" -ne 30 ]; then
+            echo "[ERROR] Expected 30 complete matrix artifacts; found $artifact_count" >&2
+            exit 1
+          fi
+          for d in downloaded/modules-*/; do
+            for module in drm drm_kms_helper i915 amdgpu ttm gpu-sched; do
+              test -s "${d}${module}.ko" || {
+                echo "[ERROR] Missing ${module}.ko in $d" >&2
+                exit 1
+              }
+            done
+          done
 
           total=0
           for d in downloaded/modules-*/; do
