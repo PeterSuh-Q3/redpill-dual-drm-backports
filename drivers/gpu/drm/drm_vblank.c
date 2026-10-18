@@ -24,7 +24,9 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <linux/delay.h>
 #include <linux/export.h>
+#include <linux/jiffies.h>
 #include <linux/moduleparam.h>
 
 #include <drm/drm_crtc.h>
@@ -1081,8 +1083,9 @@ EXPORT_SYMBOL(drm_crtc_vblank_put);
  */
 void drm_wait_one_vblank(struct drm_device *dev, unsigned int pipe)
 {
-	struct drm_vblank_crtc *vblank = &dev->vblank[pipe];
 	int ret;
+	unsigned long timeout;
+	bool vblank_seen = false;
 	u64 last;
 
 	if (WARN_ON(pipe >= dev->num_crtcs))
@@ -1093,12 +1096,25 @@ void drm_wait_one_vblank(struct drm_device *dev, unsigned int pipe)
 		return;
 
 	last = drm_vblank_count(dev, pipe);
+	/*
+	 * The DSM 4.4.302 panic report enters this wait from the i915 atomic
+	 * modeset path and faults in finish_wait(), followed by a vblank spinlock
+	 * hard lockup. Avoid that waitqueue path here: poll the counter instead.
+	 * drm_vblank_get() keeps the interrupt enabled while waiting, and this
+	 * function is called from a sleepable context.
+	 */
+	timeout = jiffies + msecs_to_jiffies(100);
+	do {
+		if (last != drm_vblank_count(dev, pipe)) {
+			vblank_seen = true;
+			break;
+		}
+		if (time_after_eq(jiffies, timeout))
+			break;
+		usleep_range(1000, 2000);
+	} while (1);
 
-	ret = wait_event_timeout(vblank->queue,
-				 last != drm_vblank_count(dev, pipe),
-				 msecs_to_jiffies(100));
-
-	WARN(ret == 0, "vblank wait timed out on crtc %i\n", pipe);
+	WARN(!vblank_seen, "vblank wait timed out on crtc %i\n", pipe);
 
 	drm_vblank_put(dev, pipe);
 }
