@@ -1,6 +1,6 @@
 # Junior bochs 가상 디스플레이 출력 추가 설계
 
-작성: 2026-10-21. 상태: 현장·소스 조사와 설계 완료, 구현/빌드 전.
+작성: 2026-10-21. 상태: 설계·구현 및 K4 컴파일 완료, 실기 적재/출력 검증 대기.
 기준 저장소는 redpill-dual-drm-backports이며 기존
 [i915 안정화 설계](junior-i915-kms-stability-design.md)를 보완한다.
 
@@ -37,15 +37,16 @@ tcrp-addons/junior-realtime-helper/src/kms-display.c의 main은 모든 cardN을
 따라서 유일하게 존재한 i915 card0를 설정하는 과정에서 HDMI 경고가 발생했다.
 로컬 소스와 실제 배포 helper의 버전/해시는 구현 직전에 다시 맞춘다.
 
-추가할 선택 정책:
+구현한 선택 정책:
 
-- 기존 일반 다중 출력 동작을 유지하면서 명시적인 driver/PCI 대상 옵션을 추가한다.
-  예: `--driver bochs-drm`, `--pci 0000:00:02.0` (아직 구현된 옵션이 아님).
+- 기존 일반 다중 출력 동작을 유지하면서 선택적 driver 인자를 추가했다.
+  `kms-display STATUS_FILE bochs-drm`처럼 호출하면 sysfs에서 카드의 driver를
+  확인해 `bochs-drm`에 바인딩된 카드만 연다.
   모듈명 bochs와 PCI driver명 bochs-drm을 구별한다.
-- sysfs로 driver·PCI·vendor/device를 확인하고 선택된 카드만 open한다.
-  card0/card1 번호를 고정하지 않는다.
-- bochs 전용 정책에서 대상이 없으면 진단을 남기고 기존 콘솔 출력을 유지한다.
-  i915로 자동 우회하지 않는다. 가상화 감지만으로 모든 장비에 정책을 강제하지 않는다.
+- `selftest.sh`는 PCI vendor/device `1234:1111`을 찾으면 helper에 `bochs-drm`
+  필터를 전달한다. 카드 번호를 고정하지 않으며, Bochs 카드가 아직 없거나
+  바인딩되지 않은 경우 i915 카드로 자동 우회하지 않는다.
+- 해당 QEMU VGA 식별자가 없는 시스템은 기존의 무필터 다중 카드 동작을 유지한다.
 - 다중 출력 시험에서는 카드별 worker와 단계 로그를 둔다. 한 카드의 실패로
   다른 카드 초기화가 막히는 범위를 줄이되 커널 Oops 격리가 보장된다고 표현하지 않는다.
 - 로그에 선택된 PCI/driver/card/connector/mode, create/map/first-touch/addfb/
@@ -96,6 +97,30 @@ probe 실패·remove·shutdown에서 해제 순서까지 구현한다. K5 헤더
 5. all-modules가 bochs.ko와 의존 파일을 추출하고 depmod 이후 modalias에 따라
    적재하는지 확인한다. 파일 포함과 자동 적재 성공은 별도 검증한다.
 
+### 구현 및 K4 빌드 결과 (2026-10-21)
+
+- Linux v5.4의 Bochs DRM 구현을 `drivers/gpu/drm/bochs-v54/`에 이식하고,
+  DRM Kconfig/Makefile에 연결했다. upstream v5.4와 동일하게 GEM VRAM helper,
+  VRAM common/MM helper를 별도 모듈로 쪼개지 않고 `drm_vram_helper.ko` 하나로
+  링크한다.
+- Docker Desktop의 `dante90/syno-compiler:7.4` 이미지에서 geminilake의
+  `/opt/geminilake/build` (`4.4.302+`)를 사용했다. `KCFLAGS`에 공용 K4
+  `kcl_compat.h`와 `CONFIG_DRM_HDMI_IN_KERNEL` 분기를 지정하고, Kconfig 선택은
+  `defines.geminilake`로 주입했다. 빌드 로그에는 `MODPOST 15 modules`가 있고,
+  최종 산출 디렉터리에는 17개의 `.ko`가 있다.
+- 재현 명령(저장소 루트에서):
+  `docker run --rm -e 'KCFLAGS=-include /tmp/input/compat/kcl_compat.h -DCONFIG_DRM_HDMI_IN_KERNEL' -v "$PWD:/input:ro" -v "$PWD/out/junior-bochs-kms-pilot/geminilake-7.4-k4.4.302:/output" dante90/syno-compiler:7.4 compile-module geminilake`.
+- `bochs-drm.ko`의 vermagic은 `4.4.302+ SMP mod_unload`; PCI alias에
+  `1234:1111`이 포함된다. 의존성은 `drm`, `drm_kms_helper`,
+  `drm_vram_helper`, `fb`; VRAM helper는 `ttm`, `drm`에 의존한다.
+  MODPOST 미해결 심볼 오류는 확인되지 않았다.
+- 산출물과 로그: `out/junior-bochs-kms-pilot/geminilake-7.4-k4.4.302/`.
+  helper C 코드는 `gcc -static -Wall -Wextra -Werror`로 컴파일했고,
+  결과 바이너리는 정적 ELF임을 확인했다. `selftest.sh`의 `sh -n` 검사도 통과했다.
+- 아직 실기에서 새 모듈을 적재하거나 `bochs-drm` 바인딩, DRM 카드 생성,
+  실제 화면 출력을 확인하지 않았다. 이 결과는 컴파일 검증이지 KMS 동작 성공이
+  아니다. 기존 i915 HDMI InfoFrame 경고도 별도 미해결 항목으로 남는다.
+
 ## 남아 있는 i915 HDMI 경고의 별도 보완
 
 실행 로그는 intel_hdmi.c:654의 WARN_ON(len < 0), AVI/SPD infoframe 불일치,
@@ -131,4 +156,4 @@ i915 경고 수정과 bochs 출력 복구는 각각 검증한다.
 파일럿의 기존 i915 콜백 수정은 유지한다. bochs 단독 출력 성공만으로 i915
 InfoFrame 문제까지 해결됐다고 판단하지 않는다. 새로운 Oops/lockup 발생 시
 해당 부팅에서 반복 적재하지 않고 로그를 보존한다. 이 문서는 추가 설계이며
-bochs 이식·빌드·실기 검증·배포 완료를 의미하지 않는다.
+컴파일 완료는 실기 적재·출력 검증 또는 배포 완료를 의미하지 않는다.

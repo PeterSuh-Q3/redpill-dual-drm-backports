@@ -300,7 +300,7 @@ source "drivers/gpu/drm/tilcdc/Kconfig"
 
 source "drivers/gpu/drm/qxl/Kconfig"
 
-source "drivers/gpu/drm/bochs/Kconfig"
+source "drivers/gpu/drm/bochs-v54/Kconfig"
 
 source "drivers/gpu/drm/virtio/Kconfig"
 
