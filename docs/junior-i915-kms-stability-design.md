@@ -1,6 +1,9 @@
 # Junior i915 KMS 안정화 설계
 
-작성: 2026-10-21. 상태: 설계, 구현·재빌드·실기 재시험 전.
+작성: 2026-10-21. 상태: geminilake K4 콜백 ABI 파일럿 적재 및 helper 실행 확인.
+이번 실행에서 이전 Oops는 관찰되지 않았으나 HDMI InfoFrame 경고가 남았다.
+bochs 가상화면 출력은 별도 드라이버 준비가 필요하다.
+추가 설계: [Junior bochs 가상 디스플레이](junior-bochs-kms-display-design.md).
 
 ## 구현 기준 저장소
 
@@ -67,6 +70,31 @@ data는 RCX로 전달된다. 3인자 구현이 이를 받으면 RDX를 data로 �
 배포 바이너리와 소스/빌드 기록이 불일치해 출처를 확인할 수 없을 때에만
 역어셈블리를 보조 증거로 사용한다. 소스 수정 설계를 시작하는 선행 조건으로
 요구하지 않는다.
+
+### geminilake K4 파일럿 빌드 (2026-10-21)
+
+- Docker Desktop `dante90/syno-compiler:7.4`의 `/opt/geminilake/build`를 사용했다.
+  헤더의 `pte_fn_t`는 `(pte, token, addr, data)` 4인자이며 커널 릴리스는
+  `4.4.302+`다.
+- `drivers/gpu/drm/i915/i915_mm.c`의 `remap_pfn`에 `pgtable_t token`을 추가하고,
+  `__builtin_types_compatible_p` 기반 컴파일 타임 검사를 두었다. 이 검사가
+  타깃 typedef와 정확히 일치해야 컴파일된다.
+- 전체 빌드가 `MODPOST 17 modules`까지 성공했고 17개 모듈의 vermagic이
+  `4.4.302+`임을 확인했다. i915.ko SHA-256:
+  `d589db8fae44f8a25ae1de2d99ca29ab16fcd2952db5b83037e695374557773f`.
+  빌드 산출물은 별도 파일럿 묶음에 보관한다.
+- `i915_mm.c`의 콜백 타입 불일치 경고는 발생하지 않았다. 다만 같은 빌드에서
+  `drm_prime.c`, `drm_connector.c`, `intel_wakeref.c`, `i915_gem_userptr.c`,
+  `i915_request.c`, `intel_acpi.c`, `intel_gmbus.c`에 다른
+  incompatible-pointer 경고가 관찰됐다. 이 경고들은 이번 콜백 수정과 별도이며,
+  해당 바이너리들을 실기에 적재하기 전에 원인을 분류해야 한다.
+- 후속 실기에서 기존 i915/DRM 스택을 정상 언로드하고 파일럿으로 교체했다.
+  card0/renderD128이 생성되고 DMC/GuC/HuC 초기화 로그를 확인했다.
+  drm_mipi_dsi와 intel-gtt는 런타임 커널 내장 심볼과 중복되어 별도 삽입하지 않았다.
+- 사용자가 helper를 실행한 뒤 uptime 약 1298.5초에 kms-display PID 1771이
+  intel_write_infoframe의 WARN_ON(len < 0)을 두 번, pipe state 불일치 경고를
+  한 번 발생시켰다. 해당 조회 범위에 새 Oops/panic은 없었다. 이전 remap_pfn
+  장애의 장기 해소 또는 물리 화면 정상 출력까지 검증한 것은 아니다.
 
 ## 근본 수정과 빌드 기준
 

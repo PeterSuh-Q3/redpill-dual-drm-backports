@@ -35,9 +35,11 @@ struct remap_pfn {
 	pgprot_t prot;
 };
 
-static int remap_pfn(pte_t *pte, unsigned long addr, void *data)
+static int remap_pfn(pte_t *pte, pgtable_t token,
+		     unsigned long addr, void *data)
 {
 	struct remap_pfn *r = data;
+	(void)token;
 
 	/* Special PTE are not associated with any struct page */
 	set_pte_at(r->mm, addr, pte, pte_mkspecial(pfn_pte(r->pfn, r->prot)));
@@ -45,6 +47,10 @@ static int remap_pfn(pte_t *pte, unsigned long addr, void *data)
 
 	return 0;
 }
+
+/* Keep this callback ABI-checked against the target kernel's mm.h typedef. */
+typedef char remap_pfn_callback_signature_check[
+	__builtin_types_compatible_p(__typeof__(&remap_pfn), pte_fn_t) ? 1 : -1];
 
 /**
  * remap_io_mapping - remap an IO mapping to userspace
