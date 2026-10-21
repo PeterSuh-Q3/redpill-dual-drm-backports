@@ -1,10 +1,12 @@
-name: "[STEP6] Dual DRM 통합 빌드 (ALL platforms 4.4.302, DSM 7.2/7.3/7.4)"
+name: "[STEP6] Dual DRM + Bochs KMS 빌드 (ALL platforms 4.4.302, DSM 7.2/7.3/7.4)"
 
 # 10 플랫폼 × DSM 7.2/7.3/7.4 = 30 빌드 매트릭스
 # geminilake-7.3 는 step6-dual-drm-geminilake-44302.yml 로 이미 완료.
 # DSM 7.4 조합도 이 풀빌드에서 함께 지원한다. 7.4 커널 입력과 export 심볼 차이는
 # 해당 matrix job 안에서 별도 기록·검증한다. DSM 7.4 단독 재실행은
 # step6-dual-drm-all-platforms-dsm74-44302.yml 에서도 가능하다.
+# 추가: K4 Bochs 가상 디스플레이 드라이버와 VRAM helper도 같은 매트릭스에서 빌드한다.
+# i915 KMS callback ABI는 i915_mm.c의 compile-time signature assertion으로 검증한다.
 #
 # ★ 2026-08-17: module-output 브랜치 push 를 build 잡 20개가 동시에 직접 하던
 # 구조(fetch→checkout→commit→push 경합)에서 실제 데이터 유실 발생(동시 push race로
@@ -117,7 +119,7 @@ jobs:
             find ksrc -maxdepth 6 -name Makefile -path "*build*" -exec head -5 {} \; 2>/dev/null | head -20
           fi
 
-      - name: "Build (Dual DRM: i915 + amdgpu)"
+      - name: "Build (Dual DRM + Bochs: i915 + amdgpu + virtual display)"
         run: |
           set -o pipefail
           export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
@@ -126,7 +128,13 @@ jobs:
           export OOT_ROOT=$PWD
 
           echo "=== [${{ matrix.platform }}-${{ matrix.version }}] host KLIB DRM .config ==="
-          grep -E '^CONFIG_(DRM|I915|AMDGPU|TTM|DRM_SCHED)' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
+          grep -E '^CONFIG_(DRM|I915|AMDGPU|TTM|DRM_SCHED|DRM_BOCHS|DRM_VRAM_HELPER)=' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
+
+          # i915의 K4 remap_pfn callback ABI 회귀를 빌드 전에 감지한다.
+          grep -q 'remap_pfn_callback_signature_check' "$OOT_ROOT/drivers/gpu/drm/i915/i915_mm.c" || {
+            echo "[ERROR] i915 K4 callback ABI compile-time check is missing" >&2
+            exit 1
+          }
 
           export OOT_KCPPFLAGS="\
             -I$OOT_ROOT/compat/backport-include \
@@ -160,6 +168,7 @@ jobs:
             CONFIG_DRM_I915=m CONFIG_DRM_I915_USERPTR=y \
             CONFIG_DRM_TTM=m CONFIG_DRM_SCHED=m \
             CONFIG_DRM_AMDGPU=m \
+            CONFIG_DRM_VRAM_HELPER=m CONFIG_DRM_BOCHS=m \
             $NOHOST_CONFIG \
             CONFIG_DRM_PANEL_ORIENTATION_QUIRKS=m \
             $EXTRA_CONFIG \
@@ -198,7 +207,9 @@ jobs:
           find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} artifact-out/ \;
           find "$GITHUB_WORKSPACE/drivers/char/agp" -name "*.ko" -exec cp -f {} artifact-out/ \;
           find "$GITHUB_WORKSPACE" -maxdepth 1 -name "*.ko" -exec cp -f {} artifact-out/ \;
-          for module in drm drm_kms_helper i915 amdgpu ttm gpu-sched; do
+          for module in drm drm_kms_helper i915 amdgpu bochs-drm drm_vram_helper \
+                        ttm gpu-sched fb fb_sys_fops cfbcopyarea cfbfillrect cfbimgblt \
+                        syscopyarea sysfillrect sysimgblt backlight; do
             test -s "artifact-out/$module.ko" || {
               echo "[ERROR] Missing required module: $module.ko" >&2
               exit 1
@@ -283,7 +294,9 @@ jobs:
             exit 1
           fi
           for d in downloaded/modules-*/; do
-            for module in drm drm_kms_helper i915 amdgpu ttm gpu-sched; do
+            for module in drm drm_kms_helper i915 amdgpu bochs-drm drm_vram_helper \
+                          ttm gpu-sched fb fb_sys_fops cfbcopyarea cfbfillrect cfbimgblt \
+                          syscopyarea sysfillrect sysimgblt backlight; do
               test -s "${d}${module}.ko" || {
                 echo "[ERROR] Missing ${module}.ko in $d" >&2
                 exit 1
@@ -311,6 +324,6 @@ jobs:
           done
           echo "총 ${total}개 .ko 반영"
 
-          git commit -m "build output all-platforms-44302 dual-drm (i915+amdgpu) [skip ci]" || \
+          git commit -m "build output all-platforms-44302 dual-drm+bochs (i915+amdgpu) [skip ci]" || \
             echo "[skip] no changes"
           git push origin module-output
