@@ -16,14 +16,7 @@ name: "[STEP6] Quad DRM KMS 빌드 (ALL platforms 4.4.302, DSM 7.2/7.3/7.4)"
 on:
   workflow_dispatch:
     inputs:
-      platforms:
-        description: "빌드할 플랫폼 목록 (공백 구분, 빈값=전체)"
-        required: false
-        default: ""
-      versions:
-        description: "DSM 버전 목록 (공백 구분, 빈값=7.2 7.3 7.4 전체)"
-        required: false
-        default: ""
+
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -76,6 +69,14 @@ jobs:
           ref: main
           fetch-depth: 1
 
+      - name: Verify quad DRM source is present
+        run: |
+          set -euo pipefail
+          test -s drivers/gpu/drm/ast-v54/ast_drv.c
+          test -s drivers/gpu/drm/ast-v54/Makefile
+          grep -Fq 'obj-$(CONFIG_DRM_AST) += ast-v54/' drivers/gpu/drm/Makefile
+          grep -Fq 'remap_pfn_callback_signature_check' drivers/gpu/drm/i915/i915_mm.c
+
       - name: Cache toolkit tarballs
         uses: actions/cache@v4
         with:
@@ -121,11 +122,25 @@ jobs:
 
       - name: "Build (Quad DRM: i915 + amdgpu + bochs + ast)"
         run: |
-          set -o pipefail
+          set -euo pipefail
           export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
           export CROSS_COMPILE=$PWD/toolchain/usr/local/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-
-          export KBUILD_MODPOST_WARN=1
           export OOT_ROOT=$PWD
+
+          test -s "$KLIB_BUILD/.config"
+          test -s "$KLIB_BUILD/Module.symvers"
+          if [ -s "$KLIB_BUILD/include/config/kernel.release" ]; then
+            case "$(cat "$KLIB_BUILD/include/config/kernel.release")" in
+              4.4.302*) ;;
+              *) echo "[ERROR] Not a 4.4.302 kernel" >&2; exit 1 ;;
+            esac
+          else
+            echo "[WARN] kernel.release not packaged; verifying built modules' vermagic at staging"
+          fi
+          awk '$2 == "i2c_bit_add_bus" {found=1} END {exit !found}' "$KLIB_BUILD/Module.symvers" || {
+            echo "[ERROR] AST needs the i2c-algo-bit provider (i2c_bit_add_bus) for this target" >&2
+            exit 1
+          }
 
           echo "=== [${{ matrix.platform }}-${{ matrix.version }}] host KLIB DRM .config ==="
           grep -E '^CONFIG_(DRM|I915|AMDGPU|TTM|DRM_SCHED|DRM_BOCHS|DRM_AST|DRM_VRAM_HELPER)=' "$KLIB_BUILD/.config" 2>/dev/null || echo "(없음)"
@@ -174,8 +189,6 @@ jobs:
             $EXTRA_CONFIG \
             KCPPFLAGS="$OOT_KCPPFLAGS" \
             modules 2>&1 | tee /tmp/build.log
-          set +o pipefail
-
           if grep -E 'WARNING:.*undefined|WARNING:.*exported twice|Unknown symbol' /tmp/build.log; then
             echo "[ERROR] MODPOST reported unresolved or duplicate symbols" >&2
             exit 1
@@ -189,11 +202,11 @@ jobs:
           echo ""
           echo "################ 빌드 결과 요약 [${{ matrix.platform }}-${{ matrix.version }}] ################"
           echo "=== [1] 에러 총수 ==="
-          grep -cE ': error:' /tmp/build.log || echo 0
+          grep -cE ': error:' /tmp/build.log || true
           echo "=== [2] 에러난 소스 파일별 건수 ==="
-          grep -oE '[a-zA-Z0-9_/.-]+\.[ch]:[0-9]+: error' /tmp/build.log | sed -E 's/:[0-9]+: error//' | sort | uniq -c | sort -rn | head -30
+          (grep -oE '[a-zA-Z0-9_/.-]+\.[ch]:[0-9]+: error' /tmp/build.log || true) | sed -E 's/:[0-9]+: error//' | sort | uniq -c | sort -rn | head -30
           echo "=== [3] 에러 메시지 유형별 ==="
-          grep -oE 'error: .*' /tmp/build.log | sed -E "s/'[^']*'/'X'/g; s/[0-9]+/N/g" | sort | uniq -c | sort -rn | head -20
+          (grep -oE 'error: .*' /tmp/build.log || true) | sed -E "s/'[^']*'/'X'/g; s/[0-9]+/N/g" | sort | uniq -c | sort -rn | head -20
           echo "=== [4] 산출 .ko ==="
           find "$OOT_ROOT/drivers/gpu/drm" -name "*.ko" 2>/dev/null | sort
           echo "=== [5] MODPOST WARNING ==="

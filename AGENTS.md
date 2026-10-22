@@ -17,9 +17,9 @@ Dispatch this exact workflow for the full all-platform run:
 Workflow: [STEP6] Quad DRM KMS 빌드 (ALL platforms 4.4.302, DSM 7.2/7.3/7.4)
 ```
 
-Leave both `platforms` and `versions` inputs empty. This selects ten kernel-4 platforms across DSM 7.2, 7.3, and 7.4 (30 matrix jobs). Do not substitute the separate DSM-7.4-only STEP6 workflow unless the user explicitly changes the requested scope.
+This workflow has no inputs: dispatch builds ten kernel-4 platforms across DSM 7.2, 7.3, and 7.4 (30 matrix jobs). Do not substitute the separate DSM-7.4-only STEP6 workflow unless the user explicitly changes the requested scope.
 
-The build jobs download each platform/DSM toolchain and kernel source, compile the combined modules, and upload per-target artifacts. The single-writer `push` job collects those artifacts and updates the `module-output` branch. After the run completes, inspect the run conclusion, every matrix job, uploaded artifacts, and the `module-output` commit. A green run summary alone does not establish a successful hardware-transcoding test: this workflow currently permits the `make modules` command to continue after a nonzero result, so inspect build logs for compiler errors, MODPOST warnings, and unresolved/unknown symbols as well.
+The build jobs download each platform/DSM toolchain and kernel source, compile the combined modules, and upload per-target artifacts. The single-writer `push` job collects those artifacts and updates the `module-output` branch. The build now fails on a nonzero `make` result or unresolved MODPOST symbol. After the run completes, inspect the run conclusion, every matrix job, uploaded artifacts, and the `module-output` commit. A green run summary alone does not establish a successful hardware-transcoding test.
 
 ## Temporary repository visibility sequence
 

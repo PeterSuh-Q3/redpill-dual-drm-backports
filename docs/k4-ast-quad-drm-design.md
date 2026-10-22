@@ -86,3 +86,23 @@ DP501 DisplayPort는 장비 내 펌웨어 백업 또는 `ast_dp501_fw.bin` 요�
   AST 파일 자체의 경고는 발견되지 않았으나 공용 경로의 안전성을 보증하지는
   않는다. 이번 변경에서 무관한 콜백을 기계적으로 변환하지 않았다.
 - 아직 미실행: AST 장비 적재/KMS/물리 출력, 전체 30-target workflow.
+
+## 풀빌드 준비 점검
+
+정규 STEP6 워크플로우는 `defines.<platform>` 파일을 읽지 않는다. 30개 matrix
+job 모두가 `make` 인자에서 `CONFIG_DRM_AST=m`과 VRAM helper/공용 DRM 설정을
+명시한다. `defines.geminilake`는 로컬 Docker 파일럿에서만 읽는다.
+풀빌드의 고정 30-target 정책을 정확히 나타내도록 사용되지 않던
+`platforms`/`versions` dispatch 입력을 제거했다. 다른 플랫폼용 defines 파일을
+생성하는 것은 이 워크플로우에 아무 효과가 없다.
+
+풀빌드 전 소스 연결, target `.config`/`Module.symvers`, K4 release(파일이
+있는 경우), AST의 `i2c_bit_add_bus` provider export를 확인한다. `make`의
+오류를 그대로 실패 처리하고 MODPOST의 unresolved/duplicate 경고도 차단한다.
+19개 필수 `.ko`와 4.4.302 vermagic 검사 후에만 artifact로 올린다. push job은
+30개 artifact와 AST 포함 필수 모듈을 재검사한 후 단일 writer로 반영한다.
+
+`Module.symvers`의 export 확인은 실제 `i2c-algo-bit.ko` 파일이 로더에
+포함되었음을 증명하지 않는다. 배포/실기 단계에서 정확한 provider 파일 및
+의존 관계를 별도로 확인해야 한다. 이 준비 변경만으로 30개 빌드가 성공한
+것은 아니다.
