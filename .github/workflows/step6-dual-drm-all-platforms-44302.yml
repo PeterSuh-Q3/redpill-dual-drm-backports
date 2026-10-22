@@ -195,7 +195,7 @@ jobs:
           fi
 
           # 디버그 심볼 제거
-          find "$OOT_ROOT" -name "*.ko" | while read ko; do
+          { find "$OOT_ROOT" \( -path "$OOT_ROOT/toolchain" -o -path "$OOT_ROOT/ksrc" \) -prune -o -name "*.ko" -print 2>/dev/null || true; } | while read ko; do
             ${CROSS_COMPILE}strip --strip-debug "$ko"
           done
 
