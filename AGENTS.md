@@ -14,7 +14,7 @@ Dispatch this exact workflow for the full all-platform run:
 
 ```text
 .github/workflows/step6-dual-drm-all-platforms-44302.yml
-Workflow: [STEP6] Dual DRM 통합 빌드 (ALL platforms 4.4.302, DSM 7.2/7.3/7.4)
+Workflow: [STEP6] Quad DRM KMS 빌드 (ALL platforms 4.4.302, DSM 7.2/7.3/7.4)
 ```
 
 Leave both `platforms` and `versions` inputs empty. This selects ten kernel-4 platforms across DSM 7.2, 7.3, and 7.4 (30 matrix jobs). Do not substitute the separate DSM-7.4-only STEP6 workflow unless the user explicitly changes the requested scope.
@@ -47,6 +47,12 @@ After module installation and reboot on the DSM host:
 Record the module workflow outcome separately from the Docker transcode result. A Docker-only pass does not establish native-app compatibility, and build success without this end-to-end test must not be described as verified hardware transcoding.
 
 ## Change safety
+
+- K4 AST source/API/provenance and compile-vs-runtime status are recorded in
+  `docs/k4-ast-quad-drm-design.md`. Re-read it before AST work after a handoff.
+  Use the Linux 5.4 AST baseline, not the K5 tree's newer AST unchanged. AST2600
+  is not supported by this baseline. Runtime needs the matching `i2c-algo-bit`
+  provider as well as the bundled DRM/TTM stack; MODPOST alone is not load proof.
 
 - Before dispatch, check the selected workflow path, target branch, full matrix inputs, and current repository visibility.
 - Preserve existing user changes, workflow artifacts, and diagnostic logs. Do not replace or discard module outputs without checking their provenance.

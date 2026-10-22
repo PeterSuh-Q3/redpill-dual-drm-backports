@@ -6,6 +6,14 @@ Dual DRM OOT 백포트. OOT 베이스는 **Linux 5.4 LTS**.
 > 전체 설계 비전은 [`CLAUDE.md`](./CLAUDE.md) 참조.
 > CLAUDE.md **§0 (Rev.3)** 에 실제 구현 현황 / 설계 대비 변경점이 정리되어 있다.
 
+## K4 Quad DRM 확장 (2026-10-22)
+
+기존 i915 + AMDGPU + Bochs에 Linux 5.4 기반 **AST 서버 VGA/KMS**를 추가했다.
+Gemini Lake DSM 7.4 / 4.4.302 통합 컴파일은 통과했으며, AST 실기 출력과
+전체 플랫폼 매트릭스는 아직 미검증이다. AST2600 지원은 포함하지 않는다.
+소스 기준, 의존성, 재현 빌드와 실기 점검은
+[K4 AST 설계·검증 기록](docs/k4-ast-quad-drm-design.md)을 참조한다.
+
 ## 현재 진행 파일럿
 
 설계서의 광범위 목표(GEN5~GEN11, CML-H/S, GCN4~RDNA1) 중 **첫 실증 타깃**을 진행 중:

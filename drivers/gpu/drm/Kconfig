@@ -278,7 +278,7 @@ source "drivers/gpu/drm/gma500/Kconfig"
 
 source "drivers/gpu/drm/udl/Kconfig"
 
-source "drivers/gpu/drm/ast/Kconfig"
+source "drivers/gpu/drm/ast-v54/Kconfig"
 
 source "drivers/gpu/drm/mgag200/Kconfig"
 
