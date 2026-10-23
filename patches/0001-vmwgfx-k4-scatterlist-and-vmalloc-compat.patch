@@ -1,0 +1,66 @@
+--- a/drivers/gpu/drm/vmwgfx/vmwgfx_drv.h
++++ b/drivers/gpu/drm/vmwgfx/vmwgfx_drv.h
+@@ -31,5 +31,6 @@
+ #include <linux/suspend.h>
+ #include <linux/sync_file.h>
++#include <linux/vmalloc.h>
+ 
+ #include <drm/drm_auth.h>
+ #include <drm/drm_device.h>
+@@ -318,7 +318,7 @@ struct vmw_piter {
+ 	struct page **pages;
+ 	const dma_addr_t *addrs;
+-	struct sg_dma_page_iter iter;
++	struct sg_page_iter iter;
+ 	unsigned long i;
+ 	unsigned long num_pages;
+ 	bool (*next)(struct vmw_piter *);
+ 	struct page *(*page)(struct vmw_piter *);
+--- a/drivers/gpu/drm/vmwgfx/vmwgfx_irq.c
++++ b/drivers/gpu/drm/vmwgfx/vmwgfx_irq.c
+@@ -25,5 +25,6 @@
+  **************************************************************************/
+ 
+ #include <linux/sched/signal.h>
++#include <linux/interrupt.h>
+ 
+ #include "vmwgfx_drv.h"
+--- a/drivers/gpu/drm/vmwgfx/vmwgfx_gmrid_manager.c
++++ b/drivers/gpu/drm/vmwgfx/vmwgfx_gmrid_manager.c
+@@ -55,5 +55,5 @@
+ 	mem->mm_node = NULL;
+ 
+-	id = ida_alloc_max(&gman->gmr_ida, gman->max_gmr_ids - 1, GFP_KERNEL);
++	id = ida_simple_get(&gman->gmr_ida, 0, gman->max_gmr_ids, GFP_KERNEL);
+ 	if (id < 0)
+ 		return (id != -ENOMEM ? 0 : id);
+@@ -77,5 +77,5 @@
+ nospace:
+ 	gman->used_gmr_pages -= bo->num_pages;
+ 	spin_unlock(&gman->lock);
+-	ida_free(&gman->gmr_ida, id);
++	ida_simple_remove(&gman->gmr_ida, id);
+ 	return 0;
+@@ -90,4 +90,4 @@
+ 
+ 	if (mem->mm_node) {
+-		ida_free(&gman->gmr_ida, mem->start);
++		ida_simple_remove(&gman->gmr_ida, mem->start);
+ 		spin_lock(&gman->lock);
+ 		gman->used_gmr_pages -= mem->num_pages;
+--- a/drivers/gpu/drm/vmwgfx/vmwgfx_ttm_buffer.c
++++ b/drivers/gpu/drm/vmwgfx/vmwgfx_ttm_buffer.c
+@@ -267,4 +267,4 @@ static bool __vmw_piter_sg_next(struct vmw_piter *viter)
+ 	bool ret = __vmw_piter_non_sg_next(viter);
+ 
+-	return __sg_page_iter_dma_next(&viter->iter) && ret;
++	return __sg_page_iter_next(&viter->iter) && ret;
+ }
+@@ -341,6 +341,6 @@
+ 	case vmw_dma_map_bind:
+ 		viter->next = &__vmw_piter_sg_next;
+ 		viter->dma_address = &__vmw_piter_sg_addr;
+-		__sg_page_iter_start(&viter->iter.base, vsgt->sgt->sgl,
++		__sg_page_iter_start(&viter->iter, vsgt->sgt->sgl,
+ 				     vsgt->sgt->orig_nents, p_offset);
+ 		break;

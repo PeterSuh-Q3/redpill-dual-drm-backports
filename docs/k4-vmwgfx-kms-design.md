@@ -61,7 +61,8 @@ K5에서 다룬 `CONFIG_MAPPING_DIRTY_HELPERS` / coherent-surface 제한을 K4�
 - v5.4 `drivers/gpu/drm/vmwgfx/`의 소스, 하위 Makefile/Kconfig, 필요한 UAPI를
   고정된 upstream snapshot으로 가져온다. 이 저장소의 DRM core/TTM과 ioctl/UAPI가
   충돌하지 않는지 비교한다.
-- `DRM_VMWGFX` Kconfig와 `vmwgfx/` Makefile 연결을 추가한다. 호스트 커널 `.config`
+- 기존 `DRM_VMWGFX` Kconfig source 경로를 실제 v5.4 소스로 채우고, `vmwgfx/`
+  Makefile 연결을 추가한다. 호스트 커널 `.config`
   접두사(`CONFIG_`)와 외부 DRM 백포트 Kconfig 출력 네임스페이스를 혼동하지 않는다.
 - v5.4 vmwgfx가 요구하는 KMS helper, TTM, framebuffer, deferred-I/O, DMA/PCI 및
   fence/dma-buf provider 각각에 대해 실제 `.ko` 또는 커널 내장 여부, export,
@@ -101,12 +102,32 @@ K5에서 다룬 `CONFIG_MAPPING_DIRTY_HELPERS` / coherent-surface 제한을 K4�
 
 ## 승격 기준 및 미포함 범위
 
-Gemini Lake K4 pilot이 빌드·MODPOST·실기 KMS 화면 수용 기준을 모두 통과한 뒤에만
-source/config/provider 점검을 나머지 K4 플랫폼으로 확대하고, 마지막에
-`.github/workflows/step6-dual-drm-all-platforms-44302.yml`의 전체 플랫폼 빌드를
-설계한다. 이 문서 작성 시점에는 K4 vmwgfx 소스 통합, K4 빌드, 실기 적재 및 전체
-매트릭스가 **미실행**이다.
+Gemini Lake K4 pilot의 빌드·MODPOST는 통과했다. 다만 실기 적재와 KMS 화면 수용은
+아직 검증되지 않았으므로, source/config/provider 점검을 나머지 K4 플랫폼으로 확대하거나
+`.github/workflows/step6-dual-drm-all-platforms-44302.yml`에 전체 매트릭스 지원을
+추가하지 않는다. 아래 구현 기록의 실기 수용시험을 먼저 마친 뒤 승격 여부를 판단한다.
 
 현재 명시적 비목표: vmwgfx 3D acceleration, Mesa userspace 제공, GPU passthrough,
 일반 VMware PCI device 지원, K5 바이너리 재사용, 이 KMS 작업을 AMD H/W
 트랜스코딩 수용시험으로 간주하는 것.
+
+## 구현 기록 — 2026-10-23
+
+- 고정 upstream v5.4 커밋 `219d54332a09e8d8741c1e1982f5eae56099de85`의
+  `drivers/gpu/drm/vmwgfx/` 65개 파일을 vendor 스냅샷과 K4 빌드 소스에 추가했다.
+- `drivers/gpu/drm/Kconfig`에는 `DRM_VMWGFX` source 항목이 이미 있었고, DRM
+  Makefile에 `obj-$(CONFIG_DRM_VMWGFX) += vmwgfx/`를 연결했다.
+- K4.4.302 차이는
+  [`patches/0001-vmwgfx-k4-scatterlist-and-vmalloc-compat.patch`](../patches/0001-vmwgfx-k4-scatterlist-and-vmalloc-compat.patch)와
+  `compat/backport-include/asm/vmware.h`, `compat/backport-include/linux/frame.h`에
+  분리했다: K4 scatterlist iterator/IDA API, 직접 필요한 vmalloc/IRQ 선언, K4에 없는
+  objtool annotation, VMware Fusion/ESXi legacy port hypercall ABI.
+- 재현 명령: `scripts/build-k4-vmwgfx-pilot.sh` (기본값은 quad DRM + vmwgfx 결합),
+  또는 `VMWGFX_ONLY=1 scripts/build-k4-vmwgfx-pilot.sh` (vmwgfx 의존성 컴파일만).
+- 기본 Gemini Lake / DSM 7.4 / K4.4.302 전체 결합 파일럿이 통과했다. 결과는
+  `out/k4-vmwgfx-kms-pilot/geminilake-7.4-k4.4.302/full-quad/`에 보존되어 있다.
+  make/MODPOST 성공, `vmwgfx.ko` 생성, `vermagic=4.4.302+`, PCI alias
+  `pci:v000015ADd00000405...`를 확인했다. 미해결/중복 심볼 게이트도 통과했다.
+- 이 결과는 **정적 컴파일 검증만** 의미한다. 아직 실기 모듈 적재, `card*`/connector
+  생성, Junior helper 출력 또는 VMware Fusion/ESXi 런타임 동작을 검증하지 않았다.
+  따라서 KMS 지원 완료로 표현하지 않는다.
