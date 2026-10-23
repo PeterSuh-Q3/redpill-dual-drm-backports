@@ -22,10 +22,18 @@ drivers/dma-buf/        (dma-fence.c, dma-resv 등 — i915/amdgpu/ttm 의존)
 drivers/gpu/drm/        코어 *.c/*.h (88개)
 drivers/gpu/drm/ttm/    drivers/gpu/drm/scheduler/
 drivers/gpu/drm/i915/   drivers/gpu/drm/amd/  (amdgpu + display DC)
+drivers/gpu/drm/vmwgfx/ (VMware SVGA II KMS; Linux v5.4 exact source)
 ```
 
 설계서 §7 의 `drm_core/` 재배치(rename)는 integration 단계에서 Makefile/patch 로 수행.
 nouveau/radeon 등 타 드라이버는 sparse-checkout 으로 제외(불필요).
+
+## VMware SVGA II 추가 경로
+
+`drivers/gpu/drm/vmwgfx/`는 K4.4.302 KMS pilot을 위해 같은 upstream v5.4
+고정 커밋(`219d54332a09e8d8741c1e1982f5eae56099de85`)에서 가져온 65개 원본 파일이다.
+K4 호환성 수정은 integration 브랜치에서 별도로 관리하며, 이 소스 추가만으로
+K4 ABI 적재 가능성이나 실기 KMS 성공을 의미하지 않는다.
 
 ## 갱신 (5.4.x bump)
 
