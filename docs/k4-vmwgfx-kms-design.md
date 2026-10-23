@@ -102,10 +102,12 @@ K5에서 다룬 `CONFIG_MAPPING_DIRTY_HELPERS` / coherent-surface 제한을 K4�
 
 ## 승격 기준 및 미포함 범위
 
-Gemini Lake K4 pilot의 빌드·MODPOST는 통과했다. 다만 실기 적재와 KMS 화면 수용은
-아직 검증되지 않았으므로, source/config/provider 점검을 나머지 K4 플랫폼으로 확대하거나
-`.github/workflows/step6-dual-drm-all-platforms-44302.yml`에 전체 매트릭스 지원을
-추가하지 않는다. 아래 구현 기록의 실기 수용시험을 먼저 마친 뒤 승격 여부를 판단한다.
+Gemini Lake / DSM 7.4 / K4.4.302의 DS920+ VMware Junior 실기에서 파일럿 `vmwgfx`
+적재, PCI `15ad:0405` 바인딩, `/dev/dri/card0` 및 `renderD128` 생성과 Junior KMS
+helper 가동까지 확인했다. 이에 따라 STEP6 전체 플랫폼 컴파일 매트릭스에는 vmwgfx를
+포함하도록 준비했다. 이는 각 플랫폼의 빌드·MODPOST 결과를 확인하기 위한 확장이지,
+모든 플랫폼의 실기 적재 검증을 뜻하지 않는다. 전체 매트릭스 완료 후에도 런타임 수용은
+플랫폼별로 구분해 기록한다.
 
 현재 명시적 비목표: vmwgfx 3D acceleration, Mesa userspace 제공, GPU passthrough,
 일반 VMware PCI device 지원, K5 바이너리 재사용, 이 KMS 작업을 AMD H/W
@@ -128,6 +130,13 @@ Gemini Lake K4 pilot의 빌드·MODPOST는 통과했다. 다만 실기 적재와
   `out/k4-vmwgfx-kms-pilot/geminilake-7.4-k4.4.302/full-quad/`에 보존되어 있다.
   make/MODPOST 성공, `vmwgfx.ko` 생성, `vermagic=4.4.302+`, PCI alias
   `pci:v000015ADd00000405...`를 확인했다. 미해결/중복 심볼 게이트도 통과했다.
-- 이 결과는 **정적 컴파일 검증만** 의미한다. 아직 실기 모듈 적재, `card*`/connector
-  생성, Junior helper 출력 또는 VMware Fusion/ESXi 런타임 동작을 검증하지 않았다.
-  따라서 KMS 지원 완료로 표현하지 않는다.
+- 2026-10-23 DS920+ (실행 프로필 `synology_geminilake_920+`, VMware SVGA II
+  `15ad:0405`) Junior 시험에서 DRM core/helper/FB 의존 모듈과 파일럿 `vmwgfx.ko`를
+  `/tmp`에서 적재했다. 초기 부팅에는 i915/DRM이 올라오지 않은 상태였으며, 파일럿
+  적재 뒤 vmwgfx가 `0000:00:0f.0`에 바인딩되고 `card0`, `renderD128`, 가상 connector
+  모드 목록을 만들었다. 사용자가 Junior helper의 정상 가동도 확인했다. 이 시험에서는
+  `/lib/modules`를 수정하지 않았고, 다섯 드라이버 모두의 개별 런타임 적재를 검증한 것은
+  아니다.
+- 위 결과는 해당 Gemini Lake VMware 시험 구성의 KMS 경로를 검증한다. VMware Fusion/ESXi
+  제품별 전체 지원, 다른 플랫폼의 실기 적재, 3D 가속 또는 VA-API 동작까지 입증하지는
+  않는다.

@@ -1,8 +1,8 @@
-# Dual DRM backport build instructions
+# Unified DRM backport build instructions
 
 ## Scope and acceptance target
 
-This repository builds the combined AMDGPU + i915 DRM kernel modules for Synology DSM platforms. The target for the current kernel-4 test line is `4.4.302`.
+This repository builds the unified i915 + AMDGPU + Bochs + AST + VMware SVGA II (`vmwgfx`) DRM kernel modules for Synology DSM platforms. The target for the current kernel-4 test line is `4.4.302`.
 
 The functional acceptance target is AMD hardware transcoding **inside a Docker container on the DSM host**. Do not treat native Plex/Jellyfin playback or transcoding on kernel 4.4 DSM as a required success case, and do not claim that a successful module build alone proves hardware transcoding works.
 
@@ -14,12 +14,12 @@ Dispatch this exact workflow for the full all-platform run:
 
 ```text
 .github/workflows/step6-dual-drm-all-platforms-44302.yml
-Workflow: [STEP6] Quad DRM KMS 빌드 (ALL platforms 4.4.302, DSM 7.2/7.3/7.4)
+Workflow: [STEP6] DRM KMS 통합 빌드 (5종: i915 + amdgpu + bochs + ast + vmwgfx; ALL platforms 4.4.302, DSM 7.2/7.3/7.4)
 ```
 
 This workflow has no inputs: dispatch builds ten kernel-4 platforms across DSM 7.2, 7.3, and 7.4 (30 matrix jobs). Do not substitute the separate DSM-7.4-only STEP6 workflow unless the user explicitly changes the requested scope.
 
-The build jobs download each platform/DSM toolchain and kernel source, compile the combined modules, and upload per-target artifacts. The single-writer `push` job collects those artifacts and updates the `module-output` branch. The build now fails on a nonzero `make` result or unresolved MODPOST symbol. After the run completes, inspect the run conclusion, every matrix job, uploaded artifacts, and the `module-output` commit. A green run summary alone does not establish a successful hardware-transcoding test.
+The build jobs download each platform/DSM toolchain and kernel source, compile the five DRM drivers and their shared providers, and upload per-target artifacts. The K4 vmwgfx compatibility patch must be applied before compilation. The single-writer `push` job collects those artifacts and updates the `module-output` branch. The build fails on a nonzero `make` result, unresolved MODPOST symbol, missing module, or missing VMware SVGA II PCI alias. After the run completes, inspect the run conclusion, every matrix job, uploaded artifacts, and the `module-output` commit. A green run summary alone does not establish successful runtime/KMS behavior or hardware transcoding.
 
 ## Temporary repository visibility sequence
 

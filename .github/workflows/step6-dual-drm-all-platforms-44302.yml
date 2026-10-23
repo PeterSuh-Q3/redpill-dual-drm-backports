@@ -1,11 +1,11 @@
-name: "[STEP6] Quad DRM KMS 빌드 (ALL platforms 4.4.302, DSM 7.2/7.3/7.4)"
+name: "[STEP6] DRM KMS 통합 빌드 (5종: i915 + amdgpu + bochs + ast + vmwgfx; ALL platforms 4.4.302, DSM 7.2/7.3/7.4)"
 
 # 10 플랫폼 × DSM 7.2/7.3/7.4 = 30 빌드 매트릭스
 # geminilake-7.3 는 step6-dual-drm-geminilake-44302.yml 로 이미 완료.
 # DSM 7.4 조합도 이 풀빌드에서 함께 지원한다. 7.4 커널 입력과 export 심볼 차이는
 # 해당 matrix job 안에서 별도 기록·검증한다. DSM 7.4 단독 재실행은
 # step6-dual-drm-all-platforms-dsm74-44302.yml 에서도 가능하다.
-# K4 Bochs/AST 디스플레이 드라이버와 VRAM helper도 같은 매트릭스에서 빌드한다.
+# K4 Bochs/AST/VMware SVGA II 디스플레이 드라이버와 VRAM helper도 같은 매트릭스에서 빌드한다.
 # i915 KMS callback ABI는 i915_mm.c의 compile-time signature assertion으로 검증한다.
 #
 # ★ 2026-08-17: module-output 브랜치 push 를 build 잡 20개가 동시에 직접 하던
@@ -69,13 +69,24 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Verify quad DRM source is present
+      - name: Verify five DRM sources and K4 vmwgfx patch are present
         run: |
           set -euo pipefail
           test -s drivers/gpu/drm/ast-v54/ast_drv.c
           test -s drivers/gpu/drm/ast-v54/Makefile
+          test -s drivers/gpu/drm/vmwgfx/vmwgfx_drv.c
+          test -s drivers/gpu/drm/vmwgfx/Makefile
+          test -s patches/0001-vmwgfx-k4-scatterlist-and-vmalloc-compat.patch
           grep -Fq 'obj-$(CONFIG_DRM_AST) += ast-v54/' drivers/gpu/drm/Makefile
+          grep -Fq 'obj-$(CONFIG_DRM_VMWGFX) += vmwgfx/' drivers/gpu/drm/Makefile
           grep -Fq 'remap_pfn_callback_signature_check' drivers/gpu/drm/i915/i915_mm.c
+
+      - name: Apply vmwgfx K4.4.302 compatibility patch
+        run: |
+          set -euo pipefail
+          patch --batch --forward -p1 -i patches/0001-vmwgfx-k4-scatterlist-and-vmalloc-compat.patch
+          grep -Fq '#include <linux/vmalloc.h>' drivers/gpu/drm/vmwgfx/vmwgfx_drv.h
+          grep -Fq 'struct sg_page_iter iter;' drivers/gpu/drm/vmwgfx/vmwgfx_drv.h
 
       - name: Cache toolkit tarballs
         uses: actions/cache@v4
@@ -120,7 +131,7 @@ jobs:
             find ksrc -maxdepth 6 -name Makefile -path "*build*" -exec head -5 {} \; 2>/dev/null | head -20
           fi
 
-      - name: "Build (Quad DRM: i915 + amdgpu + bochs + ast)"
+      - name: "Build (Five DRM: i915 + amdgpu + bochs + ast + vmwgfx)"
         run: |
           set -euo pipefail
           export KLIB_BUILD=$PWD/ksrc/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-${{ matrix.version }}/build
@@ -184,6 +195,7 @@ jobs:
             CONFIG_DRM_TTM=m CONFIG_DRM_SCHED=m \
             CONFIG_DRM_AMDGPU=m \
             CONFIG_DRM_VRAM_HELPER=m CONFIG_DRM_BOCHS=m CONFIG_DRM_AST=m \
+            CONFIG_DRM_VMWGFX=m \
             $NOHOST_CONFIG \
             CONFIG_DRM_PANEL_ORIENTATION_QUIRKS=m \
             $EXTRA_CONFIG \
@@ -220,7 +232,7 @@ jobs:
           find "$GITHUB_WORKSPACE/drivers/gpu/drm" -name "*.ko" -exec cp -f {} artifact-out/ \;
           find "$GITHUB_WORKSPACE/drivers/char/agp" -name "*.ko" -exec cp -f {} artifact-out/ \;
           find "$GITHUB_WORKSPACE" -maxdepth 1 -name "*.ko" -exec cp -f {} artifact-out/ \;
-          for module in drm drm_kms_helper i915 amdgpu bochs-drm ast drm_vram_helper \
+          for module in drm drm_kms_helper i915 amdgpu bochs-drm ast vmwgfx drm_vram_helper \
                         ttm gpu-sched fb fb_sys_fops cfbcopyarea cfbfillrect cfbimgblt \
                         syscopyarea sysfillrect sysimgblt backlight; do
             test -s "artifact-out/$module.ko" || {
@@ -234,6 +246,10 @@ jobs:
               *) echo "[ERROR] Wrong vermagic: $module" >&2; exit 1 ;;
             esac
           done
+          modinfo -F alias artifact-out/vmwgfx.ko | grep -qi 'v000015ADd00000405' || {
+            echo "[ERROR] vmwgfx artifact lacks VMware SVGA II PCI alias 15ad:0405" >&2
+            exit 1
+          }
           echo "=== artifact-out 내용 ==="
           ls -la artifact-out/
 
@@ -307,7 +323,7 @@ jobs:
             exit 1
           fi
           for d in downloaded/modules-*/; do
-            for module in drm drm_kms_helper i915 amdgpu bochs-drm ast drm_vram_helper \
+            for module in drm drm_kms_helper i915 amdgpu bochs-drm ast vmwgfx drm_vram_helper \
                           ttm gpu-sched fb fb_sys_fops cfbcopyarea cfbfillrect cfbimgblt \
                           syscopyarea sysfillrect sysimgblt backlight; do
               test -s "${d}${module}.ko" || {
@@ -337,6 +353,6 @@ jobs:
           done
           echo "총 ${total}개 .ko 반영"
 
-          git commit -m "build output all-platforms-44302 quad-drm (i915+amdgpu+bochs+ast) [skip ci]" || \
+          git commit -m "build output all-platforms-44302 five-drm (i915+amdgpu+bochs+ast+vmwgfx) [skip ci]" || \
             echo "[skip] no changes"
           git push origin module-output
